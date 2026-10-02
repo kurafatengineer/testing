@@ -6,16 +6,16 @@ import { block, contact, cx, fitFlex, fitLines, fitOne, icon, logoAt, prepare, P
 import { xmlEscape } from "./text.ts";
 
 export type PhotoPosterImages = SocialImages & { photoHref: string };
-const MEGA = "M18 11v2h4v-2h-4zm-2 6.61c.96.71 2.21 1.65 3.2 2.39.4-.53.8-1.07 1.2-1.6-.99-.74-2.24-1.68-3.2-2.4-.4.54-.8 1.08-1.2 1.61zM20.4 5.6c-.4-.53-.8-1.07-1.2-1.6-.99.74-2.24 1.68-3.2 2.4.4.53.8 1.07 1.2 1.6.96-.72 2.21-1.65 3.2-2.4zM4 9c-1.1 0-2 .9-2 2v2c0 1.1.9 2 2 2h1v4h2v-4h1l5 3V6L8 9H4zm11.5 3c0-1.33-.58-2.53-1.5-3.35v6.69c.92-.81 1.5-2.01 1.5-3.34z";
+export const MEGA = "M18 11v2h4v-2h-4zm-2 6.61c.96.71 2.21 1.65 3.2 2.39.4-.53.8-1.07 1.2-1.6-.99-.74-2.24-1.68-3.2-2.4-.4.54-.8 1.08-1.2 1.61zM20.4 5.6c-.4-.53-.8-1.07-1.2-1.6-.99.74-2.24 1.68-3.2 2.4.4.53.8 1.07 1.2 1.6.96-.72 2.21-1.65 3.2-2.4zM4 9c-1.1 0-2 .9-2 2v2c0 1.1.9 2 2 2h1v4h2v-4h1l5 3V6L8 9H4zm11.5 3c0-1.33-.58-2.53-1.5-3.35v6.69c.92-.81 1.5-2.01 1.5-3.34z";
 
-const photo = (s: Svg, href: string, x: number, y: number, w: number, h: number, clip = "", align = "xMidYMin") =>
+export const photo = (s: Svg, href: string, x: number, y: number, w: number, h: number, clip = "", align = "xMidYMin") =>
   s.raw(`<image href="${href}" x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="${align} slice"${clip ? ` clip-path="url(#${clip})"` : ""}/>`);
-const text = (family: string, size: number, x: number, y: number, t: string, fill: string, extra = "") =>
+export const text = (family: string, size: number, x: number, y: number, t: string, fill: string, extra = "") =>
   `<text x="${x}" y="${y}" font-family="${family}" font-size="${size}" fill="${fill}" ${extra}>${xmlEscape(t)}</text>`;
-const heroCity = (i: Info) => (i.city ? i.city.toUpperCase() : i.location.toUpperCase());
-const addr = (i: Info) => (i.city ? i.location : "");
-const bebasFit = (t: string, max: number, maxW: number, min = 40) => { let z = max; while (z > min && textW(t, bebas(z)) / S > maxW) z -= 2; return z; };
-const lines2 = (t: string, maxW: number, size: number, min = 24) => (t ? fitLines(t, (z) => jakarta(z, "bold"), size, maxW, 2, min) : { f: jakarta(size, "bold"), lines: [] as string[] });
+export const heroCity = (i: Info) => (i.city ? i.city.toUpperCase() : i.location.toUpperCase());
+export const addr = (i: Info) => (i.city ? i.location : "");
+export const bebasFit = (t: string, max: number, maxW: number, min = 40) => { let z = max; while (z > min && textW(t, bebas(z)) / S > maxW) z -= 2; return z; };
+export const lines2 = (t: string, maxW: number, size: number, min = 24) => (t ? fitLines(t, (z) => jakarta(z, "bold"), size, maxW, 2, min) : { f: jakarta(size, "bold"), lines: [] as string[] });
 
 // ================================================================== 22: full-bleed photo, maroon panel
 export function design22(d: AdData, img: PhotoPosterImages): string {
