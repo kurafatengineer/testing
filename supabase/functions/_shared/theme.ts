@@ -39,3 +39,20 @@ export function greenWhiteBlack(hex: string): string {
 
 /** Applies the scheme to every #rrggbb colour in an SVG (fills, strokes and gradient stops). */
 export const toGreenTheme = (svg: string) => svg.replace(/#([0-9a-fA-F]{6})\b/g, (m) => greenWhiteBlack(m.toLowerCase()));
+
+
+// ---------------------------------------------------------------- Maroon / White / Black
+const MAROON_H = 350;
+export function maroonWhiteBlack(hex: string): string {
+  const [h, s, l] = toHsl(hex);
+  if (s < 0.14) return hex;                                        // white, black and greys stay
+  if (l > 0.9) return fromHsl(MAROON_H, 0.3, 0.97);                // cream / mint paper -> near white
+  if (l < 0.24) return fromHsl(MAROON_H, 0.12, l * 0.55);          // navy / deep purple / dark green -> black
+  if (l > 0.72) return fromHsl(MAROON_H, 0.3, clamp(l, 0.9, 0.94)); // pale tints -> very light blush
+  const yellowish = h >= 38 && h < 85;                              // gold, yellow, lime -> light blush accent
+  if (yellowish) return fromHsl(MAROON_H, 0.4, clamp(l + 0.3, 0.84, 0.9));
+  // everything else (red, orange, green, blue, purple, magenta) -> maroon
+  if (l < 0.45) return fromHsl(MAROON_H, 0.68, clamp(l * 0.8, 0.2, 0.3));
+  return fromHsl(MAROON_H, 0.62, clamp(l * 0.6, 0.3, 0.38));
+}
+export const toMaroonTheme = (svg: string) => svg.replace(/#([0-9a-fA-F]{6})\b/g, (m) => maroonWhiteBlack(m.toLowerCase()));
