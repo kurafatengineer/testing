@@ -14,6 +14,9 @@ export const SCHOOL = "M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3L1 9l11 6 9
 export const BOOK = "M21 5c-1.11-.35-2.33-.5-3.5-.5-1.95 0-4.05.4-5.5 1.5-1.45-1.1-3.55-1.5-5.5-1.5S2.45 4.9 1 6v14.65c0 .25.25.5.5.5.1 0 .15-.05.25-.05C3.1 20.45 5.05 20 6.5 20c1.95 0 4.05.4 5.5 1.5 1.35-.85 3.8-1.5 5.5-1.5 1.65 0 3.35.3 4.75 1.05.1.05.15.05.25.05.25 0 .5-.25.5-.5V6c-.6-.45-1.25-.75-2-1zm0 13.5c-1.1-.35-2.3-.5-3.5-.5-1.7 0-4.15.65-5.5 1.5V8c1.35-.85 3.8-1.5 5.5-1.5 1.2 0 2.4.15 3.5.5v11.5z";
 export const STAR = "M12 2l2.9 6.9 7.1.6-5.4 4.7 1.7 7.3L12 17.8 5.7 21.5l1.7-7.3L2 9.5l7.1-.6z";
 
+/** Set by the green theme so the WhatsApp logo gets a white disc behind it. */
+export const themeFlags = { waDisc: false };
+
 export type SocialImages = { whatsappHref: string };
 
 export type Info = {
@@ -68,6 +71,7 @@ export function contact(s: Svg, img: SocialImages, y: number, textFill: string, 
   const nf = fit(num, poppinsBlack, big, maxW);
   const nw = textW(num, nf) / S, r = Math.round(nf.size * 0.7);
   const total = r * 2 + 24 + nw + 24 + r * 1.7, x0 = centerX - total / 2;
+  if (themeFlags.waDisc) s.circle(x0 + r, y, r + 4, WHITE); // green themes: keep the WhatsApp logo readable on green bars
   s.image(img.whatsappHref, x0, y - r, r * 2, r * 2);
   s.put(x0 + r * 2 + 24, y + nf.size * 0.36, num, nf, textFill);
   const ccx = x0 + r * 2 + 24 + nw + 24 + r * 0.85;
