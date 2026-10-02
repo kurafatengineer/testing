@@ -117,7 +117,7 @@ export class Svg {
     }
   }
 
-  toString(bg: string): string {
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="${bg}"/>${this.parts.join("")}</svg>`;
+  toString(bg: string, w = W, h = H): string {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><rect width="${w}" height="${h}" fill="${bg}"/>${this.parts.join("")}</svg>`;
   }
 }
