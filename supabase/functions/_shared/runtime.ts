@@ -38,6 +38,7 @@ export function buildDeps(): Deps {
     db: supabaseDb(url, key),
     adminIds: new Set(env("ADMIN_ID").replace(/\s+/g, "").split(",").filter(Boolean).map(Number)),
     miniappUrl: env("MINIAPP_URL"),
+    openAccess: env("REQUIRE_APPROVAL") !== "true", // TESTING: open to everyone until REQUIRE_APPROVAL=true
     makePosters: posterFunctionClient(url, key),
   };
 }

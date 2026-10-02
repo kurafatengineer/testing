@@ -262,7 +262,7 @@
 
   // The form talks to one Supabase function. It only accepts requests that carry Telegram's signed
   // launch data, so this address is safe to be public.
-  var SUBMIT_URL = "https://uucmngomvppbjnfnbsvn.supabase.co/functions/v1/submit-ad";
+  var SUBMIT_URL = "https://uucmngomvppbjnfnbsvn.supabase.co/functions/v1/telegram-bot";
 
   var tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
   var initData = tg && tg.initData ? tg.initData : "";

@@ -211,4 +211,34 @@ function world() {
   check(w.calls.length === 1, "no poster for refused requests");
 }
 
+// ---------------------------------------------------------------- 7. open access (testing mode: no approval needed)
+{
+  const w = world();
+  w.deps.openAccess = true;
+  await handleUpdate(w.deps, w.text(STRANGER, "/start"));
+  check(w.lastTo(STRANGER).text.includes('Type "Hi" to start') && !w.sent.some((m) => ADMINS.includes(m.chat)), "open mode: /start gives the welcome text, no approval request");
+  await handleUpdate(w.deps, w.text(STRANGER, "Hi"));
+  check(w.lastTo(STRANGER).text === "Select Tutor Type:", "open mode: a stranger can start the questions");
+  await handleUpdate(w.deps, w.press(STRANGER, "home"));
+  for (const a of ["5 ICSE", "English", "Delhi", "Dwarka", "110075"]) await handleUpdate(w.deps, w.text(STRANGER, a));
+  check(w.posters.length === 1 && w.posters[0].chat === STRANGER, "open mode: posters delivered to a stranger");
+  await handleUpdate(w.deps, w.text(STRANGER, "Home Tutor Required\nClass + Board: 1 CBSE\nSubject: Maths\nLocation: X\nPin Code: 110001"));
+  check(w.posters.length === 2, "open mode: template message works");
+  const q: Promise<unknown>[] = [];
+  const TOKEN = "123456:TESTTOKEN";
+  const f: Record<string, string> = { auth_date: String(Math.floor(Date.now() / 1000)), query_id: "AAH", user: JSON.stringify({ id: STRANGER, first_name: "S" }) };
+  const dcs = Object.keys(f).sort().map((k) => `${k}=${f[k]}`).join("\n");
+  const hash = createHmac("sha256", createHmac("sha256", "WebAppData").update(TOKEN).digest()).update(dcs).digest("hex");
+  const initData = new URLSearchParams({ ...f, hash }).toString();
+  const r = await handleSubmit(w.deps, TOKEN, { init_data: initData, tutor_type: "home", class_name: "9", board: "CBSE", subject: "Maths", city: "Delhi", location: "Rohini", pin_code: "110085" }, (p) => q.push(p));
+  await Promise.all(q);
+  check(r.status === 200 && w.posters.length === 3, "open mode: form works for a stranger (signature still required)");
+  const bad = await handleSubmit(w.deps, TOKEN, { init_data: "hash=forged", tutor_type: "home" }, () => {});
+  check(bad.status === 401, "open mode: a forged form is still refused");
+  // approval switched back on -> gate returns
+  w.deps.openAccess = false;
+  await handleUpdate(w.deps, w.text(STRANGER, "Hi"));
+  check(w.lastTo(STRANGER).text.includes("not approved"), "approval switched on again: stranger refused");
+}
+
 console.log(`ALL FLOW TESTS PASSED (${passed} checks)`);

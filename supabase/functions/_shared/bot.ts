@@ -10,6 +10,7 @@ export type Deps = {
   db: Db;
   adminIds: Set<number>;
   miniappUrl: string; // address of the Mini App form ("" = form not set up)
+  openAccess?: boolean; // true = no approval needed (testing). Set the REQUIRE_APPROVAL secret to "true" to turn the gate on.
   makePosters: (data: AdData) => Promise<[Uint8Array, Uint8Array]>;
 };
 
@@ -77,7 +78,7 @@ export function buildCaption(d: AdData): string {
 
 const fullName = (u: any) => [u?.first_name, u?.last_name].filter(Boolean).join(" ");
 const isAdmin = (d: Deps, id: number) => d.adminIds.has(id);
-export const isApproved = async (d: Deps, id: number) => isAdmin(d, id) || await d.db.isAllowed(id);
+export const isApproved = async (d: Deps, id: number) => d.openAccess === true || isAdmin(d, id) || await d.db.isAllowed(id);
 const emptySession = (): Session => ({ step: "", data: {}, tracked: [] });
 
 async function cleanup(d: Deps, chat: number, ids: number[]) {

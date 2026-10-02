@@ -22,7 +22,7 @@ Mini App  --form------------>  Edge Function  submit-ad    --+--> approval check
 | Path | What it is |
 |---|---|
 | `supabase/functions/telegram-bot` | Telegram webhook: approval, `/users`, `Hi` questions, template, `/form` |
-| `supabase/functions/submit-ad` | Receives the Mini App form (checks Telegram's signature first) |
+| `supabase/functions/telegram-bot` (also) | Receives the Mini App form on the same address (checks Telegram's signature first) |
 | `supabase/functions/render-poster` | Draws ONE poster (1 or 2) as a PNG |
 | `supabase/functions/_shared` | Poster drawing (`poster1.ts`, `poster2.ts`), bot logic (`bot.ts`), Telegram/database clients |
 | `supabase/migrations` | Database tables |
@@ -31,12 +31,21 @@ Mini App  --form------------>  Edge Function  submit-ad    --+--> approval check
 | `fonts-source/`, `scripts/` | Original fonts and the script that makes the compact ones in `assets/fonts` |
 | `tests/` | `flow_test.ts` (whole conversation, no network), `render_compare.ts` (draws both posters) |
 
+
+## Testing mode (current)
+
+Approval is **off**: anyone who messages the bot gets posters (the Mini App form still needs Telegram's signature).
+To turn the admin approval on later, add the secret `REQUIRE_APPROVAL` = `true` (and `ADMIN_ID`); no code change is needed.
+`render-poster` also has a public demo page for testing: `.../functions/v1/render-poster?poster=1` (or `2`, plus `&subject=..&city=..`).
+Remove the GET branch in `render-poster/index.ts` when securing.
+
 ## Settings (Supabase: Edge Functions, Secrets)
 
 | Name | Meaning |
 |---|---|
 | `TELEGRAM_TOKEN` | Bot token from BotFather |
-| `ADMIN_ID` | Telegram user ids of the admins, comma separated |
+| `ADMIN_ID` | Telegram user ids of the admins, comma separated (only needed once approval is on) |
+| `REQUIRE_APPROVAL` | `true` = only admins and approved users can use the bot. Anything else = open to everyone (testing) |
 | `WEBHOOK_SECRET` | Any long random text. Telegram sends it with every update so nobody else can call the bot |
 | `MINIAPP_URL` | Address of the form, e.g. `https://kurafatengineer.github.io/testing/` |
 | `ASSET_BASE_URL` | Optional. Where `assets/` is served from (default: this repo's raw GitHub address) |
