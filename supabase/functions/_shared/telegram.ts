@@ -35,8 +35,8 @@ export function telegramApi(token: string): Tg {
         { type: "document", media: "attach://p1" },
         { type: "document", media: "attach://p2", caption, parse_mode: "Markdown" },
       ]));
-      form.set("p1", new Blob([p1], { type: "image/png" }), "Urban Tutor Ad 01.png");
-      form.set("p2", new Blob([p2], { type: "image/png" }), "Urban Tutor Ad 02.png");
+      form.set("p1", new Blob([p1 as BlobPart], { type: "image/png" }), "Urban Tutor Ad 01.png");
+      form.set("p2", new Blob([p2 as BlobPart], { type: "image/png" }), "Urban Tutor Ad 02.png");
       await call("sendMediaGroup", undefined, form);
     },
   };

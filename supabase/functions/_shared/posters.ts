@@ -1,6 +1,7 @@
 // One entry point for both posters: draw as SVG, rasterise to PNG.
 import { Assets } from "./assets.ts";
-import { renderAd1Svg, type AdData } from "./poster1.ts";
+import { renderAd1Svg } from "./poster1.ts";
+import type { AdData } from "./types.ts";
 import { renderAd2Svg } from "./poster2.ts";
 import { svgToPng } from "./render.ts";
 import { OUT, W } from "./svg.ts";

@@ -16,7 +16,7 @@ Deno.serve(async (req) => {
     const t1 = performance.now();
     const png = await renderPoster(poster, data, assets);
     console.log(`poster ${poster}: assets ${(t1 - t0).toFixed(0)} ms, draw ${(performance.now() - t1).toFixed(0)} ms`);
-    return new Response(png, { headers: { "content-type": "image/png" } });
+    return new Response(png as BodyInit, { headers: { "content-type": "image/png" } });
   } catch (e) {
     console.error("render failed:", e);
     return new Response(`render failed: ${(e as Error).message}`, { status: 500 });

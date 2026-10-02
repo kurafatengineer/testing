@@ -2,7 +2,7 @@
 import { formatClass, splitClassBoard, tidyCase } from "./text.ts";
 import { BURST, BURST_SHADOW } from "./burst.ts";
 import { Font, jakarta, poppinsBlack, S, sc, Svg, textW, W, H, wrap } from "./svg.ts";
-import type { AdData } from "./poster1.ts";
+import type { AdData } from "./types.ts";
 
 const WEBSITE = "www.urbantutorsite.com";
 const WHATSAPP_NUMBER = "+91 8178740408";

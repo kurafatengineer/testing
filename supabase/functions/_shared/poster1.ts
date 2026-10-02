@@ -1,16 +1,10 @@
 // Poster 1 ("cream and red"): a line-by-line port of render_ad() from AdImage01.py.
 // Same coordinates, same text fitting; the output is an SVG string instead of a Pillow image.
 import { formatClass, splitClassBoard, tidyCase } from "./text.ts";
+import type { AdData } from "./types.ts";
 import { bebas, Font, jakarta, sc, S, Svg, textW, W, H, wrap } from "./svg.ts";
 
-export type AdData = {
-  gender: string;       // "Female" or "Male | Female"
-  class_board: string;  // e.g. "9 CBSE"
-  subject: string;
-  location: string;
-  pin: string;
-  city?: string;
-};
+export type { AdData };
 
 export const PHONE_NUMBER = "+91 99118 40408";
 const BADGE_TEXT = "NEW REQUIREMENT";

@@ -2,7 +2,7 @@
 // template) that keeps its state in the database, because a webhook function remembers nothing.
 import type { Db, Session } from "./db.ts";
 import type { Tg } from "./telegram.ts";
-import type { AdData } from "./poster1.ts";
+import type { AdData } from "./types.ts";
 import { tidyCase } from "./text.ts";
 
 export type Deps = {

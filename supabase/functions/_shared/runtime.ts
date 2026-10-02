@@ -2,7 +2,7 @@
 import type { Deps } from "./bot.ts";
 import { supabaseDb } from "./db.ts";
 import { telegramApi } from "./telegram.ts";
-import type { AdData } from "./poster1.ts";
+import type { AdData } from "./types.ts";
 
 declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
