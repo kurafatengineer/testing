@@ -145,7 +145,7 @@ function world() {
   check(w.sent.length === 0, "/users ignored for non-admins");
   await handleUpdate(w.deps, w.text(1, "/users"));
   const list = w.lastTo(1);
-  check(list.text.includes("Approved users (1)") && list.markup.inline_keyboard.length === 1 && list.markup.inline_keyboard[0][0].text.includes("Test User") && list.markup.inline_keyboard[0][0].callback_data === "remove:100", "list is buttons, excludes admins");
+  check(list.text.includes("Approved users (1)") && list.markup.inline_keyboard.length === 1 && list.markup.inline_keyboard[0][0].text === "🗑 Test User | 100" && list.markup.inline_keyboard[0][0].callback_data === "remove:100", "list is buttons, excludes admins");
   await handleUpdate(w.deps, w.press(1, "remove:100", 1, list.id));
   check(w.edits.at(-1)?.text === "Remove Test User (ID: 100)?", "asks to confirm");
   await handleUpdate(w.deps, w.press(1, "cancelremove:0", 1, list.id));

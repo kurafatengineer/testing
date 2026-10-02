@@ -322,7 +322,7 @@ async function renderUsers(d: Deps): Promise<{ text: string; markup?: unknown }>
   if (!users.length) return { text: "No approved users." };
   return {
     text: `Approved users (${users.length}) - tap one to remove:`,
-    markup: { inline_keyboard: users.map((u) => [{ text: `🗑 ${u.name || "Unknown"}${u.username ? " @" + u.username : ""}`.slice(0, 60), callback_data: `remove:${u.telegram_id}` }]) },
+    markup: { inline_keyboard: users.map((u) => [{ text: `🗑 ${u.name || "Unknown"} | ${u.telegram_id}`.slice(0, 60), callback_data: `remove:${u.telegram_id}` }]) },
   };
 }
 
