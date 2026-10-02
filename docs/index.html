@@ -293,6 +293,11 @@
     $("pv").classList.remove("show"); seq++; drawPin(); syncButtons(); window.scrollTo(0, 0);
   });
   $("close").addEventListener("click", function () { if (tg) tg.close(); else window.close(); });
+  // tap anywhere outside a text box: hide the keyboard
+  document.addEventListener("pointerdown", function (e) {
+    var el = document.activeElement;
+    if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA") && !(e.target.closest && e.target.closest("input, textarea, .pinbox, .fl"))) el.blur();
+  });
   drawPin(); syncButtons();
 })();
 </script>
