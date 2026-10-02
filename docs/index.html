@@ -20,10 +20,19 @@
   .sub { margin:0; color:var(--muted); font-size:14px; }
 
   .card { border:1.5px solid var(--line); border-radius:20px; padding:16px; margin:14px 0; }
-  .lab { display:block; font-size:13px; font-weight:700; margin:0 0 6px; }
+  .fl { position:relative; }
+  .fl > span { position:absolute; left:18px; top:18px; font-size:16px; color:var(--muted); pointer-events:none;
+         transition:all .15s ease; transform-origin:left top; }
+  .fl.has > span, .fl:focus-within > span { top:9px; font-size:11px; font-weight:700; color:var(--ink); }
+  .fl input { padding-top:25px; padding-bottom:8px; height:58px; }
+  .fl textarea { padding-top:26px; padding-bottom:10px; min-height:104px; }
+  textarea { width:100%; font:inherit; font-size:16px; padding:13px 18px; border:1.5px solid var(--line); border-radius:24px;
+         background:#fff; color:var(--ink); outline:none; resize:none; display:block; min-height:92px; }
+  textarea:focus { border-color:var(--ink); }
+  textarea.bad { border-color:#111; background:var(--soft); }
   .field { margin-bottom:14px; }
   .field:last-child { margin-bottom:0; }
-  input[type=text] { width:100%; font:inherit; font-size:16px; padding:13px 16px; border:1.5px solid var(--line);
+  input[type=text] { width:100%; font:inherit; font-size:16px; padding:13px 18px; border:1.5px solid var(--line);
          border-radius:999px; background:#fff; color:var(--ink); outline:none; }
   input[type=text]:focus { border-color:var(--ink); }
   input.bad { border-color:#111; background:var(--soft); }
@@ -58,8 +67,9 @@
   .banner { display:none; margin:14px 0; padding:12px 16px; border-radius:16px; background:var(--soft); border:1.5px solid var(--line); font-size:14px; }
   .banner.show { display:block; }
 
-  .bar { position:fixed; left:0; right:0; bottom:0; z-index:10; background:rgba(255,255,255,.95); backdrop-filter:blur(12px);
+  .bar { display:none; position:fixed; left:0; right:0; bottom:0; z-index:10; background:rgba(255,255,255,.95); backdrop-filter:blur(12px);
          border-top:1.5px solid var(--line); padding:12px 16px calc(12px + env(safe-area-inset-bottom)); }
+  .bar.show { display:block; }
   .bar .row { max-width:560px; margin:0 auto; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   .btn { border:1.5px solid var(--ink); border-radius:999px; padding:15px 8px; font:inherit; font-size:16px; font-weight:800; cursor:pointer;
          background:#fff; color:var(--ink); }
@@ -80,8 +90,6 @@
 <div class="wrap">
   <header>
     <div class="brand">Urban Tutoring Services</div>
-    <h1>Tutor Required</h1>
-    <p class="sub">Fill in the details. Your 2 posters arrive in this chat.</p>
   </header>
 
   <div id="formArea">
@@ -94,22 +102,17 @@
       </div>
 
       <section class="card">
-        <label class="field"><span class="lab">Class</span>
-          <input type="text" id="cls" placeholder="e.g. 9" maxlength="40" enterkeyhint="next">
-          <div class="err" id="errCls">Please enter the class.</div></label>
-        <label class="field"><span class="lab">Board</span>
-          <input type="text" id="board" placeholder="e.g. CBSE" maxlength="40" enterkeyhint="next">
-          <div class="err" id="errBoard">Please enter the board.</div></label>
-        <label class="field"><span class="lab">Subject</span>
-          <input type="text" id="subject" placeholder="e.g. Maths, Science" maxlength="120" enterkeyhint="next">
-          <div class="err" id="errSubject">Please enter the subject.</div></label>
-        <label class="field"><span class="lab">City</span>
-          <input type="text" id="city" placeholder="e.g. New Delhi" maxlength="60" autocapitalize="words" enterkeyhint="next">
-          <div class="err" id="errCity">Please enter the city.</div></label>
-        <label class="field"><span class="lab">Location</span>
-          <input type="text" id="location" placeholder="e.g. Gandhi Vihar, Mukherjee Nagar" maxlength="120" autocapitalize="words" enterkeyhint="next">
-          <div class="err" id="errLocation">Please enter the location.</div></label>
-        <div class="field"><span class="lab">Pin Code</span>
+        <div class="field"><div class="fl"><span>Class</span><input type="text" id="cls" maxlength="40" enterkeyhint="next"></div>
+          <div class="err" id="errCls">Please enter the class.</div></div>
+        <div class="field"><div class="fl"><span>Board</span><input type="text" id="board" maxlength="40" enterkeyhint="next"></div>
+          <div class="err" id="errBoard">Please enter the board.</div></div>
+        <div class="field"><div class="fl"><span>Subject</span><input type="text" id="subject" maxlength="120" enterkeyhint="next"></div>
+          <div class="err" id="errSubject">Please enter the subject.</div></div>
+        <div class="field"><div class="fl"><span>City</span><input type="text" id="city" maxlength="60" autocapitalize="words" enterkeyhint="next"></div>
+          <div class="err" id="errCity">Please enter the city.</div></div>
+        <div class="field"><div class="fl"><span>Location</span><textarea id="location" rows="3" maxlength="120" autocapitalize="words"></textarea></div>
+          <div class="err" id="errLocation">Please enter the location.</div></div>
+        <div class="field">
           <div class="pinbox" id="pinbox">
             <div class="cells" id="cells"></div>
             <input type="text" id="pin" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" aria-label="Pin code, 6 digits">
@@ -188,15 +191,20 @@
   });
 
   var errs = { cls: "errCls", board: "errBoard", subject: "errSubject", city: "errCity", location: "errLocation" };
+  function labelState(id) { $(id).parentNode.classList.toggle("has", $(id).value.length > 0); }
   Object.keys(errs).forEach(function (id) {
     $(id).addEventListener("input", function () {
-      $(id).classList.remove("bad"); $(errs[id]).classList.remove("show"); refreshPreview();
+      labelState(id); $(id).classList.remove("bad"); $(errs[id]).classList.remove("show"); syncButtons(); refreshPreview();
     });
   });
-  try { var lc = localStorage.getItem("ad_city"); if (lc) $("city").value = lc; } catch (e) {}
+  try { var lc = localStorage.getItem("ad_city"); if (lc) { $("city").value = lc; labelState("city"); } } catch (e) {}
 
   function pinDone() { return /^\d{6}$/.test($("pin").value); }
-  function syncButtons() { $("prevBtn").disabled = !pinDone() || sending; $("go").disabled = !pinDone() || sending; }
+  function syncButtons() {
+    var ready = pinDone() && !missing().length;
+    document.querySelector(".bar").classList.toggle("show", ready);
+    $("prevBtn").disabled = !ready || sending; $("go").disabled = !ready || sending;
+  }
 
   // ----- preview: the real posters, drawn by the server -----
   var seq = 0, timer = null;
@@ -276,7 +284,7 @@
 
   $("again").addEventListener("click", function () {
     document.body.classList.remove("is-done");
-    ["cls", "board", "subject", "location", "pin"].forEach(function (id) { $(id).value = ""; });
+    ["cls", "board", "subject", "location", "pin"].forEach(function (id) { $(id).value = ""; if (errs[id]) labelState(id); });
     $("pv").classList.remove("show"); seq++; drawPin(); syncButtons(); window.scrollTo(0, 0);
   });
   $("close").addEventListener("click", function () { if (tg) tg.close(); else window.close(); });
