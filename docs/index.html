@@ -46,6 +46,7 @@
   .type[aria-pressed=true] { background:var(--ink); color:#fff; }
 
   /* pin code in six boxes: one real input sits on top, invisible */
+  .pinlab { font-size:13px; font-weight:700; margin:0 0 8px 4px; }
   .pinbox { position:relative; }
   .cells { display:grid; grid-template-columns:repeat(6,1fr); gap:8px; }
   .cell { aspect-ratio:1/1.15; border:1.5px solid var(--line); border-radius:14px; display:grid; place-items:center;
@@ -116,6 +117,7 @@
         <div class="field"><div class="fl tall"><span>Location</span><textarea id="location" rows="3" maxlength="120" autocapitalize="words"></textarea></div>
           <div class="err" id="errLocation">Please enter the location.</div></div>
         <div class="field">
+          <div class="pinlab">Pin Code</div>
           <div class="pinbox" id="pinbox">
             <div class="cells" id="cells"></div>
             <input type="text" id="pin" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" aria-label="Pin code, 6 digits">
