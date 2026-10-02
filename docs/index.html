@@ -21,11 +21,12 @@
 
   .card { border:1.5px solid var(--line); border-radius:20px; padding:16px; margin:14px 0; }
   .fl { position:relative; }
-  .fl > span { position:absolute; left:18px; top:18px; font-size:16px; color:var(--muted); pointer-events:none;
-         transition:all .15s ease; transform-origin:left top; }
-  .fl.has > span, .fl:focus-within > span { top:9px; font-size:11px; font-weight:700; color:var(--ink); }
-  .fl input { padding-top:25px; padding-bottom:8px; height:58px; }
-  .fl textarea { padding-top:26px; padding-bottom:10px; min-height:104px; }
+  .fl > span { position:absolute; left:16px; top:29px; transform:translateY(-50%); font-size:16px; color:var(--muted);
+         pointer-events:none; transition:all .15s ease; padding:0 6px; background:transparent; line-height:1; }
+  .fl.tall > span { top:29px; }
+  .fl.has > span, .fl:focus-within > span { top:0; font-size:12px; font-weight:700; color:var(--ink); background:#fff; }
+  .fl input { height:58px; padding-top:13px; padding-bottom:13px; }
+  .fl textarea { padding-top:18px; padding-bottom:12px; min-height:104px; }
   textarea { width:100%; font:inherit; font-size:16px; padding:13px 18px; border:1.5px solid var(--line); border-radius:24px;
          background:#fff; color:var(--ink); outline:none; resize:none; display:block; min-height:92px; }
   textarea:focus { border-color:var(--ink); }
@@ -110,7 +111,7 @@
           <div class="err" id="errSubject">Please enter the subject.</div></div>
         <div class="field"><div class="fl"><span>City</span><input type="text" id="city" maxlength="60" autocapitalize="words" enterkeyhint="next"></div>
           <div class="err" id="errCity">Please enter the city.</div></div>
-        <div class="field"><div class="fl"><span>Location</span><textarea id="location" rows="3" maxlength="120" autocapitalize="words"></textarea></div>
+        <div class="field"><div class="fl tall"><span>Location</span><textarea id="location" rows="3" maxlength="120" autocapitalize="words"></textarea></div>
           <div class="err" id="errLocation">Please enter the location.</div></div>
         <div class="field">
           <div class="pinbox" id="pinbox">
