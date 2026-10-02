@@ -1,5 +1,5 @@
 // The Mini App form endpoint: checks Telegram's signature, checks the person is allowed,
-// then makes the posters in the background.
+// (board is optional: the class box may hold "9 CBSE") then makes the posters in the background.
 import { verifyInitData } from "./auth.ts";
 import { deliverPosters, isApproved, type Deps } from "./bot.ts";
 
@@ -19,7 +19,7 @@ export async function handleSubmit(
   const class_name = clean(body?.class_name, 40), board = clean(body?.board, 40);
   const subject = clean(body?.subject, 120), city = clean(body?.city, 60), location = clean(body?.location, 120);
   const pin = clean(body?.pin_code, 6);
-  if ((type !== "home" && type !== "female") || !class_name || !board || !subject || !city || !location || !/^\d{6}$/.test(pin)) {
+  if ((type !== "home" && type !== "female") || !class_name || !subject || !city || !location || !/^\d{6}$/.test(pin)) {
     return { status: 400, json: { ok: false, error: "invalid_input" } };
   }
 
