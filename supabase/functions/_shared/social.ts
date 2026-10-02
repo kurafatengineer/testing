@@ -6,21 +6,22 @@ import type { AdData } from "./types.ts";
 
 export const RED = "#D71C34", YELLOW = "#FDC453", DEEP_YELLOW = "#F4B400", INK = "#161616", WHITE = "#FFFFFF", CREAM = "#FFF6E0", MUTED = "#6B5A55";
 const NUMBER = "+91 8178740408";
+export const NUMBER2 = "+91 9911840408";
 
-const PIN = "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z";
-const CALL = "M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z";
-const SCHOOL = "M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3L1 9l11 6 9-4.91V17h2V9L12 3z";
-const BOOK = "M21 5c-1.11-.35-2.33-.5-3.5-.5-1.95 0-4.05.4-5.5 1.5-1.45-1.1-3.55-1.5-5.5-1.5S2.45 4.9 1 6v14.65c0 .25.25.5.5.5.1 0 .15-.05.25-.05C3.1 20.45 5.05 20 6.5 20c1.95 0 4.05.4 5.5 1.5 1.35-.85 3.8-1.5 5.5-1.5 1.65 0 3.35.3 4.75 1.05.1.05.15.05.25.05.25 0 .5-.25.5-.5V6c-.6-.45-1.25-.75-2-1zm0 13.5c-1.1-.35-2.3-.5-3.5-.5-1.7 0-4.15.65-5.5 1.5V8c1.35-.85 3.8-1.5 5.5-1.5 1.2 0 2.4.15 3.5.5v11.5z";
-const STAR = "M12 2l2.9 6.9 7.1.6-5.4 4.7 1.7 7.3L12 17.8 5.7 21.5l1.7-7.3L2 9.5l7.1-.6z";
+export const PIN = "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z";
+export const CALL = "M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z";
+export const SCHOOL = "M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3L1 9l11 6 9-4.91V17h2V9L12 3z";
+export const BOOK = "M21 5c-1.11-.35-2.33-.5-3.5-.5-1.95 0-4.05.4-5.5 1.5-1.45-1.1-3.55-1.5-5.5-1.5S2.45 4.9 1 6v14.65c0 .25.25.5.5.5.1 0 .15-.05.25-.05C3.1 20.45 5.05 20 6.5 20c1.95 0 4.05.4 5.5 1.5 1.35-.85 3.8-1.5 5.5-1.5 1.65 0 3.35.3 4.75 1.05.1.05.15.05.25.05.25 0 .5-.25.5-.5V6c-.6-.45-1.25-.75-2-1zm0 13.5c-1.1-.35-2.3-.5-3.5-.5-1.7 0-4.15.65-5.5 1.5V8c1.35-.85 3.8-1.5 5.5-1.5 1.2 0 2.4.15 3.5.5v11.5z";
+export const STAR = "M12 2l2.9 6.9 7.1.6-5.4 4.7 1.7 7.3L12 17.8 5.7 21.5l1.7-7.3L2 9.5l7.1-.6z";
 
 export type SocialImages = { whatsappHref: string };
 
-type Info = {
+export type Info = {
   headline: string; female: boolean; cityPin: string; city: string; pin: string;
   location: string; classBoard: string; subject: string;
 };
 
-function prepare(d: AdData): Info {
+export function prepare(d: AdData): Info {
   const female = d.gender.trim().toLowerCase() === "female";
   const [c, b] = splitClassBoard(d.class_board);
   const cls = formatClass(c);
@@ -33,13 +34,13 @@ function prepare(d: AdData): Info {
 }
 
 // ------------------------------------------------------------ helpers
-const cx = (text: string, f: Font, spacing = 0) => (W - textW(text, f, spacing) / S) / 2;
-const icon = (s: Svg, path: string, x: number, y: number, size: number, fill: string) =>
+export const cx = (text: string, f: Font, spacing = 0) => (W - textW(text, f, spacing) / S) / 2;
+export const icon = (s: Svg, path: string, x: number, y: number, size: number, fill: string) =>
   s.raw(`<g transform="translate(${x} ${y}) scale(${size / 24})"><path d="${path}" fill="${fill}"/></g>`);
 export const logoAt = (s: Svg, x: number, y: number, size: number, rot = 0) =>
   s.raw(`<g transform="translate(${x} ${y}) rotate(${rot} ${size / 2} ${size / 2}) scale(${size / 1500})">${LOGO_INNER}</g>`);
 
-function fitLines(text: string, make: (s: number) => Font, size: number, maxW: number, maxLines: number, minSize = 24) {
+export function fitLines(text: string, make: (s: number) => Font, size: number, maxW: number, maxLines: number, minSize = 24) {
   for (let sz = size; sz >= minSize; sz -= 2) {
     const f = make(sz), lines = wrap(text, f, maxW);
     if (lines.length <= maxLines) return { f, lines };
@@ -47,28 +48,28 @@ function fitLines(text: string, make: (s: number) => Font, size: number, maxW: n
   const f = make(minSize);
   return { f, lines: wrap(text, f, maxW).slice(0, maxLines) };
 }
-const fitOne = (text: string, make: (s: number) => Font, size: number, maxW: number, min = 22) => fit(text, make, size, maxW, min);
+export const fitOne = (text: string, make: (s: number) => Font, size: number, maxW: number, min = 22) => fit(text, make, size, maxW, min);
 
 /** One line if it fits at a readable size, otherwise two smaller lines. */
-function fitFlex(text: string, make: (s: number) => Font, size: number, maxW: number) {
+export function fitFlex(text: string, make: (s: number) => Font, size: number, maxW: number) {
   const one = fitLines(text, make, size, maxW, 1, 32);
   if (wrap(text, one.f, maxW).length <= 1) return one;
   return fitLines(text, make, 30, maxW, 2, 22);
 }
 
 /** Multi-line text block; returns the y just below the block. */
-function block(s: Svg, x: number, baseline: number, lines: string[], f: Font, fill: string, gap = 8) {
+export function block(s: Svg, x: number, baseline: number, lines: string[], f: Font, fill: string, gap = 8) {
   lines.forEach((ln, i) => s.put(x, baseline + i * (f.size + gap), ln, f, fill));
   return baseline + (lines.length - 1) * (f.size + gap) + f.size * 0.3;
 }
 
 /** WhatsApp logo + number + call icon, centred at y. */
-function contact(s: Svg, img: SocialImages, y: number, textFill: string, callBg: string, callFg: string, maxW = 600, big = 60) {
-  const nf = fit(NUMBER, poppinsBlack, big, maxW);
-  const nw = textW(NUMBER, nf) / S, r = Math.round(nf.size * 0.7);
-  const total = r * 2 + 24 + nw + 24 + r * 1.7, x0 = (W - total) / 2;
+export function contact(s: Svg, img: SocialImages, y: number, textFill: string, callBg: string, callFg: string, maxW = 600, big = 60, num = NUMBER, centerX = W / 2) {
+  const nf = fit(num, poppinsBlack, big, maxW);
+  const nw = textW(num, nf) / S, r = Math.round(nf.size * 0.7);
+  const total = r * 2 + 24 + nw + 24 + r * 1.7, x0 = centerX - total / 2;
   s.image(img.whatsappHref, x0, y - r, r * 2, r * 2);
-  s.put(x0 + r * 2 + 24, y + nf.size * 0.36, NUMBER, nf, textFill);
+  s.put(x0 + r * 2 + 24, y + nf.size * 0.36, num, nf, textFill);
   const ccx = x0 + r * 2 + 24 + nw + 24 + r * 0.85;
   s.circle(ccx, y, r * 0.85, callBg);
   icon(s, CALL, ccx - r * 0.5, y - r * 0.5, r, callFg);
