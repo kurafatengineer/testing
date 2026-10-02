@@ -111,6 +111,7 @@ export async function deliverPosters(d: Deps, chat: number, data: AdData, source
     await d.tg.typing(chat);
     const [p1, p2] = await d.makePosters(data);
     await d.tg.sendPosters(chat, p1, p2, buildCaption(data));
+    try { await d.db.purgeStaleSessions(6); } catch { /* housekeeping only */ } // answers of questions nobody finished
   } catch (e) {
     console.error("poster failed:", e);
     await logFailure(String((e as Error)?.message ?? e).slice(0, 300));

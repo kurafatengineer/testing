@@ -47,6 +47,7 @@ function world() {
     getSession: async (c) => { const s = sessions.get(c); return s ? structuredClone(s) : null; },
     saveSession: async (c, s) => { sessions.set(c, structuredClone(s)); },
     clearSession: async (c) => { sessions.delete(c); },
+    purgeStaleSessions: async () => {},
     log: async (e) => { logs.push(e); },
   };
   const calls: any[] = [];

@@ -19,6 +19,8 @@ export interface Db {
   getSession(chat: number): Promise<Session | null>;
   saveSession(chat: number, s: Session): Promise<void>;
   clearSession(chat: number): Promise<void>;
+  /** Removes half-finished question sessions that nobody completed (older than `hours`). */
+  purgeStaleSessions(hours: number): Promise<void>;
   log(e: LogEntry): Promise<void>;
 }
 
@@ -49,6 +51,7 @@ export function supabaseDb(url: string, key: string): Db {
     },
     saveSession: async (chat, s) => { await upsert("bot_sessions", { chat_id: chat, ...s, updated_at: new Date().toISOString() }); },
     clearSession: async (chat) => { await rest("DELETE", `bot_sessions?chat_id=eq.${chat}`); },
+    purgeStaleSessions: async (hours) => { await rest("DELETE", `bot_sessions?updated_at=lt.${new Date(Date.now() - hours * 3600_000).toISOString()}`); },
     log: async (e) => { try { await rest("POST", "ad_log", e, "return=minimal"); } catch { /* logging must never break a poster */ } },
   };
 }
