@@ -32,20 +32,24 @@ Mini App  --form------------>  Edge Function  submit-ad    --+--> approval check
 | `tests/` | `flow_test.ts` (whole conversation, no network), `render_compare.ts` (draws both posters) |
 
 
-## Testing mode (current)
+## Who can use the bot
 
-Approval is **off**: anyone who messages the bot gets posters (the Mini App form still needs Telegram's signature).
-To turn the admin approval on later, add the secret `REQUIRE_APPROVAL` = `true` (and `ADMIN_ID`); no code change is needed.
-`render-poster` also has a public demo page for testing: `.../functions/v1/render-poster?poster=1` (or `2`, plus `&subject=..&city=..`).
-Remove the GET branch in `render-poster/index.ts` when securing.
+Only **admins** (`ADMIN_ID`) and **approved users**. A new person sends `/start`, every admin gets an Approve / Reject
+message, and the person is let in once one admin taps Approve. Admins see an **Approved Users** button under the
+welcome text (or send `/users`): the list is buttons only, tap a name, then confirm, to remove someone.
+The chat is kept clean: each new message removes the previous questions and answers; only the poster files and
+their caption stay.
+
+For quick tests without approval set the secret `OPEN_ACCESS` = `true` (everyone gets in). Leave it unset normally.
+`render-poster` has a public demo/preview page (`.../functions/v1/render-poster?poster=1`) that the form's preview uses.
 
 ## Settings (Supabase: Edge Functions, Secrets)
 
 | Name | Meaning |
 |---|---|
 | `TELEGRAM_TOKEN` | Bot token from BotFather |
-| `ADMIN_ID` | Telegram user ids of the admins, comma separated (only needed once approval is on) |
-| `REQUIRE_APPROVAL` | `true` = only admins and approved users can use the bot. Anything else = open to everyone (testing) |
+| `ADMIN_ID` | Telegram user ids of the admins, comma separated |
+| `OPEN_ACCESS` | Optional. `true` = everyone can use the bot (testing only) |
 | `WEBHOOK_SECRET` | Any long random text. Telegram sends it with every update so nobody else can call the bot |
 | `MINIAPP_URL` | Address of the form, e.g. `https://kurafatengineer.github.io/testing/` |
 | `ASSET_BASE_URL` | Optional. Where `assets/` is served from (default: this repo's raw GitHub address) |

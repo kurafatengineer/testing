@@ -10,7 +10,7 @@ export type Deps = {
   db: Db;
   adminIds: Set<number>;
   miniappUrl: string; // address of the Mini App form ("" = form not set up)
-  openAccess?: boolean; // true = no approval needed (testing). Set the REQUIRE_APPROVAL secret to "true" to turn the gate on.
+  openAccess?: boolean; // true = no approval needed (testing only). Normally false: only admins and approved users get in.
   makePosters: (data: AdData) => Promise<[Uint8Array, Uint8Array]>;
 };
 
@@ -79,10 +79,21 @@ export function buildCaption(d: AdData): string {
 const fullName = (u: any) => [u?.first_name, u?.last_name].filter(Boolean).join(" ");
 const isAdmin = (d: Deps, id: number) => d.adminIds.has(id);
 export const isApproved = async (d: Deps, id: number) => d.openAccess === true || isAdmin(d, id) || await d.db.isAllowed(id);
+/** Admins get one extra button under the welcome text. */
+const adminMenu = (d: Deps, id: number) =>
+  isAdmin(d, id) ? { inline_keyboard: [[{ text: "👥 Approved Users", callback_data: "users" }]] } : undefined;
 const emptySession = (): Session => ({ step: "", data: {}, tracked: [] });
 
 async function cleanup(d: Deps, chat: number, ids: number[]) {
   for (const id of ids) { try { await d.tg.deleteMessage(chat, id); } catch { /* already gone */ } }
+}
+
+/** A new message arrived: remove everything shown for the previous one (posters are never tracked, so they stay). */
+async function newTurn(d: Deps, chat: number, msgId: number): Promise<Session> {
+  const s = (await d.db.getSession(chat)) ?? emptySession();
+  await cleanup(d, chat, s.tracked);
+  s.tracked = [msgId];
+  return s;
 }
 
 /** Sends a question and remembers the message so it can be removed at the end. */
@@ -97,6 +108,8 @@ export async function deliverPosters(d: Deps, chat: number, data: AdData, source
     city: data.city ?? "", location: data.location, pin_code: data.pin, status, error,
   });
   try {
+    const old = await d.db.getSession(chat); // tidy the chat first (Q&A, form button...) - the posters themselves are kept forever
+    if (old) { await cleanup(d, chat, old.tracked); await d.db.clearSession(chat); }
     await d.tg.typing(chat);
     const [p1, p2] = await d.makePosters(data);
     await d.tg.sendPosters(chat, p1, p2, buildCaption(data));
@@ -104,7 +117,10 @@ export async function deliverPosters(d: Deps, chat: number, data: AdData, source
   } catch (e) {
     console.error("poster failed:", e);
     await log("failed", String((e as Error)?.message ?? e).slice(0, 300));
-    try { await d.tg.sendMessage(chat, FAILED_TEXT); } catch { /* user blocked the bot */ }
+    try {
+      const id = await d.tg.sendMessage(chat, FAILED_TEXT);
+      await d.db.saveSession(chat, { step: "", data: {}, tracked: [id] });
+    } catch { /* user blocked the bot */ }
   }
 }
 
@@ -130,27 +146,29 @@ async function onMessage(d: Deps, m: any) {
     const cmd = text.split(/[\s@]/)[0].toLowerCase();
     if (cmd === "/start") return await onStart(d, m);
     if (!await isApproved(d, uid)) return void await d.tg.sendMessage(uid, REJECT_TEXT);
-    if (cmd === "/users") return isAdmin(d, uid) ? await showUsers(d, uid) : undefined;
-    if (cmd === "/form") return await onForm(d, uid);
-    return;
+    if (cmd === "/users" && !isAdmin(d, uid)) return;
+    if (cmd !== "/users" && cmd !== "/form") return;
+    const s = await newTurn(d, uid, m.message_id);
+    if (cmd === "/users") await showUsers(d, uid, s); else await onForm(d, uid, s);
+    return await d.db.saveSession(uid, s);
   }
   if (!await isApproved(d, uid)) return void await d.tg.sendMessage(uid, REJECT_TEXT);
   await onConversationText(d, m, text);
 }
 
-async function onForm(d: Deps, chat: number) {
-  if (!d.miniappUrl) return void await d.tg.sendMessage(chat, "The form is not set up yet.");
-  await d.tg.sendMessage(chat, "Fill in the tutor requirement and the two posters will arrive here.", {
-    reply_markup: { inline_keyboard: [[{ text: "📝 Open the form", web_app: { url: d.miniappUrl } }]] },
-  });
+async function onForm(d: Deps, chat: number, s: Session) {
+  if (!d.miniappUrl) return await ask(d, chat, s, "The form is not set up yet.");
+  await ask(d, chat, s, "Fill in the tutor requirement and the two posters will arrive here.",
+    { inline_keyboard: [[{ text: "📝 Open the form", web_app: { url: d.miniappUrl } }]] });
 }
 
 async function onStart(d: Deps, m: any) {
   const user = m.from, chat: number = user.id;
 
   if (await isApproved(d, chat)) {
-    const s = (await d.db.getSession(chat)) ?? emptySession();
-    s.tracked = [await d.tg.sendMessage(chat, startText(d.miniappUrl), { parse_mode: "Markdown" })];
+    const s = await newTurn(d, chat, m.message_id);
+    s.step = ""; s.data = {};
+    s.tracked.push(await d.tg.sendMessage(chat, startText(d.miniappUrl), { parse_mode: "Markdown", reply_markup: adminMenu(d, chat) }));
     await d.db.saveSession(chat, s);
     return;
   }
@@ -181,8 +199,7 @@ async function onStart(d: Deps, m: any) {
 
 async function onConversationText(d: Deps, m: any, text: string) {
   const chat: number = m.chat.id;
-  let s = (await d.db.getSession(chat)) ?? emptySession();
-  s.tracked.push(m.message_id);
+  let s = await newTurn(d, chat, m.message_id);
 
   if (text.toLowerCase() === "hi") {
     await cleanup(d, chat, s.tracked);
@@ -230,8 +247,16 @@ async function onCallback(d: Deps, q: any) {
   const data: string = q.data ?? "";
   const [action, arg = ""] = [data.split(":")[0], data.split(":")[1]];
 
-  if (["approve", "reject", "remove", "confirmremove", "cancelremove"].includes(action)) {
+  if (["approve", "reject", "remove", "confirmremove", "cancelremove", "users"].includes(action)) {
     if (!isAdmin(d, uid)) return void await d.tg.answerCallback(q.id);
+    if (action === "users") {
+      await d.tg.answerCallback(q.id);
+      const s = (await d.db.getSession(uid)) ?? emptySession();
+      await cleanup(d, uid, s.tracked);
+      s.tracked = [];
+      await showUsers(d, uid, s);
+      return await d.db.saveSession(uid, s);
+    }
     if (action === "approve" || action === "reject") return await onDecision(d, q, action, Number(arg));
     return await onRemove(d, q, action, arg);
   }
@@ -282,13 +307,14 @@ async function onDecision(d: Deps, q: any, action: "approve" | "reject", userId:
       name = fullName(chat); username = chat?.username ?? "";
     }
     await d.db.addAllowed(userId, name, username);
-    await d.tg.sendMessage(userId, startText(d.miniappUrl), { parse_mode: "Markdown" });
+    const welcome = await d.tg.sendMessage(userId, startText(d.miniappUrl), { parse_mode: "Markdown", reply_markup: adminMenu(d, userId) });
     await tidyUp();
+    await d.db.saveSession(userId, { step: "", data: {}, tracked: [welcome] });
   } else {
     await tidyUp();
     await d.tg.sendMessage(userId, REJECT_TEXT);
+    await d.db.clearSession(userId);
   }
-  await d.db.clearSession(userId);
 }
 
 // ------------------------------------------------------------------ /users
@@ -296,16 +322,15 @@ async function onDecision(d: Deps, q: any, action: "approve" | "reject", userId:
 async function renderUsers(d: Deps): Promise<{ text: string; markup?: unknown }> {
   const users = (await d.db.listAllowed()).filter((u) => !d.adminIds.has(u.telegram_id));
   if (!users.length) return { text: "No approved users." };
-  const lines = users.map((u, i) => `${i + 1}. ${u.name || "Unknown"}\n   ${u.username ? "@" + u.username : "no username"} | ID: ${u.telegram_id}`);
   return {
-    text: `Approved users (${users.length}):\n\n${lines.join("\n\n")}`,
-    markup: { inline_keyboard: users.map((u) => [{ text: `🗑 Remove ${u.name || "Unknown"}`.slice(0, 60), callback_data: `remove:${u.telegram_id}` }]) },
+    text: `Approved users (${users.length}) - tap one to remove:`,
+    markup: { inline_keyboard: users.map((u) => [{ text: `🗑 ${u.name || "Unknown"}${u.username ? " @" + u.username : ""}`.slice(0, 60), callback_data: `remove:${u.telegram_id}` }]) },
   };
 }
 
-async function showUsers(d: Deps, chat: number) {
+async function showUsers(d: Deps, chat: number, s: Session) {
   const { text, markup } = await renderUsers(d);
-  await d.tg.sendMessage(chat, text, { reply_markup: markup });
+  await ask(d, chat, s, text, markup);
 }
 
 async function onRemove(d: Deps, q: any, action: string, uid: string) {

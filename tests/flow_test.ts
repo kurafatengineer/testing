@@ -145,13 +145,42 @@ function world() {
   check(w.sent.length === 0, "/users ignored for non-admins");
   await handleUpdate(w.deps, w.text(1, "/users"));
   const list = w.lastTo(1);
-  check(list.text.includes("Approved users (1)") && list.text.includes("ID: 100") && !list.text.includes("Admin"), "list excludes admins");
+  check(list.text.includes("Approved users (1)") && list.markup.inline_keyboard.length === 1 && list.markup.inline_keyboard[0][0].text.includes("Test User") && list.markup.inline_keyboard[0][0].callback_data === "remove:100", "list is buttons, excludes admins");
   await handleUpdate(w.deps, w.press(1, "remove:100", 1, list.id));
   check(w.edits.at(-1)?.text === "Remove Test User (ID: 100)?", "asks to confirm");
   await handleUpdate(w.deps, w.press(1, "cancelremove:0", 1, list.id));
   check(w.edits.at(-1)?.text.includes("Approved users (1)"), "cancel returns to the list");
   await handleUpdate(w.deps, w.press(1, "confirmremove:100", 1, list.id));
   check(!w.allowed.has(USER) && w.lastTo(USER).text === "Your access to this bot has been removed." && w.edits.at(-1)?.text === "No approved users.", "user removed and told");
+}
+
+// ---------------------------------------------------------------- 3b. clean chat + admin button
+{
+  const w = world();
+  w.allowed.set(USER, { name: "Test User", username: "tester" });
+  const gone = (id: number) => w.deleted.some(([, i]) => i === id);
+  await handleUpdate(w.deps, w.text(USER, "/start"));
+  const welcome = w.lastTo(USER);
+  check(welcome.markup === undefined, "normal user has no admin button");
+  await handleUpdate(w.deps, w.text(USER, "Hi"));
+  check(gone(welcome.id), "welcome removed when the next message arrives");
+  const kb = w.lastTo(USER);
+  await handleUpdate(w.deps, w.press(USER, "home"));
+  await handleUpdate(w.deps, w.text(USER, "9 CBSE"));
+  check(gone(kb.id), "old question removed after the answer");
+  await handleUpdate(w.deps, w.text(USER, "/form"));
+  const formMsg = w.lastTo(USER);
+  await handleUpdate(w.deps, w.text(USER, "Home Tutor Required\nClass + Board: 1 CBSE\nSubject: Maths\nLocation: X\nPin Code: 110001"));
+  check(gone(formMsg.id) && w.posters.length === 1, "form button cleaned, posters kept (never deleted)");
+
+  // admin: welcome has a Users button that opens the list
+  await handleUpdate(w.deps, w.text(1, "/start"));
+  const aw = w.lastTo(1);
+  check(aw.markup.inline_keyboard[0][0].callback_data === "users", "admin has Approved Users button");
+  await handleUpdate(w.deps, w.press(1, "users", 1, aw.id));
+  check(w.lastTo(1).text.includes("Approved users (1)") && gone(aw.id), "button opens the list and clears the welcome");
+  await handleUpdate(w.deps, w.press(USER, "users"));
+  check(!w.sent.some((m) => m.chat === USER && m.text.includes("Approved users")), "users button is admin-only");
 }
 
 // ---------------------------------------------------------------- 4. /form + failures

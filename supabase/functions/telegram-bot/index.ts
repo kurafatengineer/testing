@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
     const self = `https://${new URL(env("SUPABASE_URL")).host}/functions/v1/telegram-bot`;
     const out: Record<string, unknown> = {
       webhook: await api("setWebhook", { url: self, secret_token: secret, allowed_updates: ["message", "callback_query"], drop_pending_updates: true }),
-      access: env("REQUIRE_APPROVAL") === "true" ? "approval required" : "OPEN to everyone (testing)",
+      access: env("OPEN_ACCESS") === "true" ? "OPEN to everyone (testing)" : "approved users only",
     };
     if (env("MINIAPP_URL")) {
       out.menu_button = await api("setChatMenuButton", { menu_button: { type: "web_app", text: "Form", web_app: { url: env("MINIAPP_URL") } } });
