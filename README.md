@@ -27,7 +27,7 @@ Mini App  --form------------>  Edge Function  submit-ad    --+--> approval check
 | `supabase/functions/_shared` | Poster drawing (`poster1.ts`, `poster2.ts`), bot logic (`bot.ts`), Telegram/database clients |
 | `supabase/migrations` | Database tables |
 | `docs/index.html` | The Mini App form (published with GitHub Pages) |
-| `assets/` | Fonts and images the poster function downloads at start-up |
+| `assets/` | Fonts, images and the renderer (`resvg.wasm`) the poster function downloads at start-up |
 | `fonts-source/`, `scripts/` | Original fonts and the script that makes the compact ones in `assets/fonts` |
 | `tests/` | `flow_test.ts` (whole conversation, no network), `render_compare.ts` (draws both posters) |
 

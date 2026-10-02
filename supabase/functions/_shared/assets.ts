@@ -15,8 +15,6 @@ const FONT_FILES: Record<string, string> = {
   poppins: "fonts/Poppins-Black.ttf",
 };
 
-export const WASM_URL = "https://cdn.jsdelivr.net/npm/@resvg/resvg-wasm@2.6.2/index_bg.wasm";
-
 function toBase64(bytes: Uint8Array): string {
   let bin = "";
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
