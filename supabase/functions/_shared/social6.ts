@@ -140,7 +140,7 @@ export function design25(d: AdData, img: PhotoPosterImages): string {
   // city + pin
   const hero = bebasFit(heroCity(i), 100, 540, 50);
   s.rrect([60, 780, 740, 892], 34, { fill: GRN });
-  icon(s, PIN, 90, 812, 50, "#FFFFFF"); s.raw(text("BebasX", hero, 160, 836 + hero * 0.5, heroCity(i), "#FFFFFF"));
+  icon(s, PIN, 90, 812, 50, "#FFFFFF"); s.raw(text("BebasX", hero, 160, 836 + hero * 0.35, heroCity(i), "#FFFFFF"));
   s.rrect([760, 780, 1020, 892], 34, { fill: DK }); s.put(786, 822, "PIN CODE", jakarta(18, "extrabold"), "#BDE6CC", 4); s.put(786, 872, i.pin, poppinsBlack(42), "#FFFFFF", 4);
   const A = lines2(addr(i), 900, 32, 22);
   let y = 912;
