@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#ffffff">
+<title>Tutor Required – Poster Form</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --red: #d62828;
+    --red-dark: #991b1b;
+    --red-tint: #fdecec;
+    --red-line: rgba(214, 40, 40, 0.28);
+    --yellow: #f4b400;
+    --yellow-tint: #fff6d6;
+    --text: #2a0808;
+    --muted: #7b5755;
+    --line: #efd9d6;
+    --bg: #fffaf9;
+    --card: #ffffff;
+    --green: #15803d;
+    --radius: 18px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Devanagari", sans-serif;
+    line-height: 1.45;
+    padding: 0 0 calc(110px + env(safe-area-inset-bottom));
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 0 16px; }
+
+  /* ---------- header ---------- */
+  header { padding: 18px 0 6px; text-align: center; }
+  .brand { font-weight: 850; font-size: 17px; letter-spacing: -0.3px; }
+  .brand b { color: var(--red); }
+  h1 { margin: 6px 0 2px; font-size: 26px; letter-spacing: -0.6px; }
+  .sub { margin: 0; color: var(--muted); font-size: 14px; }
+
+  /* ---------- live preview ---------- */
+  .preview {
+    margin: 16px 0 18px;
+    border-radius: 22px;
+    background: linear-gradient(160deg, #e03232 0%, var(--red) 55%, #b91c1c 100%);
+    color: #fff;
+    padding: 18px 18px 16px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 10px 28px rgba(214, 40, 40, 0.28);
+  }
+  .preview::after {
+    content: ""; position: absolute; right: -50px; top: -50px; width: 170px; height: 170px;
+    border-radius: 50%; border: 22px solid rgba(255, 255, 255, 0.1);
+  }
+  .p-badge {
+    display: inline-block; background: var(--yellow); color: var(--text);
+    font-weight: 900; font-size: 12px; letter-spacing: 0.12em; padding: 5px 12px; border-radius: 999px;
+  }
+  .p-title { margin: 10px 0 12px; font-size: 24px; font-weight: 900; letter-spacing: -0.5px; line-height: 1.1; }
+  .p-grid { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; font-size: 14px; position: relative; z-index: 1; }
+  .p-grid dt { opacity: 0.8; }
+  .p-grid dd { margin: 0; font-weight: 700; word-break: break-word; }
+  .p-grid dd.empty { opacity: 0.45; font-weight: 500; }
+  .p-note { margin: 12px 0 0; font-size: 11.5px; opacity: 0.8; }
+
+  /* ---------- cards & fields ---------- */
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px; margin-bottom: 14px;
+  }
+  .card h2 { margin: 0 0 12px; font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 800; }
+  .card h2 i { font-style: normal; color: var(--red); }
+
+  .types { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .type {
+    border: 2px solid var(--line); border-radius: 16px; background: #fff; padding: 14px 10px;
+    text-align: center; cursor: pointer; font: inherit; color: inherit; transition: all .15s ease;
+  }
+  .type .ico { font-size: 26px; display: block; }
+  .type b { display: block; margin-top: 4px; font-size: 15px; }
+  .type small { color: var(--muted); font-size: 12px; }
+  .type[aria-pressed="true"] { border-color: var(--red); background: var(--red-tint); box-shadow: 0 0 0 3px var(--red-line); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    border: 1.5px solid var(--line); background: #fff; color: var(--text); border-radius: 999px;
+    padding: 9px 14px; font: inherit; font-size: 14.5px; font-weight: 600; cursor: pointer; transition: all .12s ease;
+  }
+  .chip:active { transform: scale(0.96); }
+  .chip[aria-pressed="true"] { background: var(--red); border-color: var(--red); color: #fff; }
+  .chip.soft[aria-pressed="true"] { background: var(--yellow); border-color: var(--yellow); color: var(--text); }
+  .chips.tight .chip { padding: 8px 13px; min-width: 46px; text-align: center; }
+
+  label.field { display: block; margin-bottom: 14px; }
+  label.field:last-child { margin-bottom: 0; }
+  .lab { display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+  .lab span { color: var(--muted); font-weight: 500; font-size: 12.5px; }
+  input[type="text"], input[type="tel"], textarea {
+    width: 100%; font: inherit; font-size: 16px; /* 16px stops iOS zoom */
+    padding: 13px 14px; border-radius: 14px; border: 1.5px solid var(--line); background: #fffdfc; color: var(--text);
+    outline: none; transition: border-color .12s, box-shadow .12s;
+  }
+  input:focus, textarea:focus { border-color: var(--red); box-shadow: 0 0 0 3px var(--red-line); }
+  input.bad { border-color: #dc2626; background: #fff5f5; }
+  .err { color: #b91c1c; font-size: 12.5px; margin-top: 5px; min-height: 0; display: none; }
+  .err.show { display: block; }
+  .extra { margin-top: 10px; display: none; }
+  .extra.show { display: block; }
+  .suggest { margin-top: 10px; }
+  .suggest-lab { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+
+  /* ---------- notices ---------- */
+  .banner {
+    display: none; margin-bottom: 14px; padding: 12px 14px; border-radius: 14px;
+    background: var(--yellow-tint); border: 1px solid #f1d27a; color: #6b4a00; font-size: 14px;
+  }
+  .banner.show { display: block; }
+
+  /* ---------- submit bar ---------- */
+  .bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+    background: rgba(255, 255, 255, 0.94); backdrop-filter: blur(12px);
+    border-top: 1px solid var(--line); padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  }
+  .bar .wrap { padding: 0; }
+  .go {
+    width: 100%; border: 0; border-radius: 16px; padding: 16px; font: inherit; font-size: 17px; font-weight: 800;
+    color: #fff; background: var(--red); cursor: pointer; box-shadow: 0 8px 18px rgba(214, 40, 40, 0.3);
+    transition: transform .1s ease, opacity .15s ease;
+  }
+  .go:active { transform: scale(0.985); }
+  .go:disabled { opacity: 0.55; box-shadow: none; cursor: not-allowed; }
+  .go .spin { display: none; width: 16px; height: 16px; border: 2.5px solid rgba(255, 255, 255, .5); border-top-color: #fff; border-radius: 50%; animation: sp .7s linear infinite; vertical-align: -2px; margin-right: 8px; }
+  .go.busy .spin { display: inline-block; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+
+  /* ---------- success ---------- */
+  #done { display: none; text-align: center; padding: 56px 8px 0; }
+  #done .tick {
+    width: 84px; height: 84px; border-radius: 50%; background: #dcfce7; color: var(--green);
+    display: grid; place-items: center; margin: 0 auto 18px; font-size: 44px; animation: pop .35s ease;
+  }
+  @keyframes pop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  #done h2 { margin: 0 0 8px; font-size: 24px; }
+  #done p { margin: 0 auto 22px; color: var(--muted); max-width: 320px; }
+  .btn2 {
+    display: block; width: 100%; max-width: 320px; margin: 10px auto 0; padding: 14px; border-radius: 14px;
+    border: 1.5px solid var(--red); background: #fff; color: var(--red); font: inherit; font-weight: 800; font-size: 16px; cursor: pointer;
+  }
+  .btn2.solid { background: var(--yellow); border-color: var(--yellow); color: var(--text); }
+  body.is-done #formArea, body.is-done .bar, body.is-done header { display: none; }
+  body.is-done #done { display: block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">Home <b>Tutoring Services</b></div>
+    <h1>Tutor Required</h1>
+    <p class="sub">Fill in the details. Your 2 posters arrive in this chat.</p>
+  </header>
+
+  <div id="formArea">
+    <div class="banner" id="outside">
+      Open this form from the Telegram bot (send <b>/form</b>). Outside Telegram it can't send your request.
+    </div>
+
+    <!-- live preview -->
+    <section class="preview" aria-live="polite">
+      <span class="p-badge" id="pBadge">HOME TUTOR</span>
+      <div class="p-title">Tutor Required</div>
+      <dl class="p-grid">
+        <dt>Class</dt><dd id="pClass" class="empty">Choose a class</dd>
+        <dt>Subject</dt><dd id="pSubject" class="empty">Add a subject</dd>
+        <dt>City</dt><dd id="pCity" class="empty">Add a city</dd>
+        <dt>Location</dt><dd id="pLocation" class="empty">Add a location</dd>
+        <dt>Pin code</dt><dd id="pPin" class="empty">6 digits</dd>
+      </dl>
+      <p class="p-note">Quick preview. The real posters are designed when you tap Create.</p>
+    </section>
+
+    <form id="f" novalidate autocomplete="off">
+      <section class="card">
+        <h2>1 · Tutor type <i>*</i></h2>
+        <div class="types" role="group" aria-label="Tutor type">
+          <button type="button" class="type" data-type="home" aria-pressed="true">
+            <span class="ico">🏠</span><b>Home Tutor</b><small>Male or Female</small>
+          </button>
+          <button type="button" class="type" data-type="female" aria-pressed="false">
+            <span class="ico">👩‍🏫</span><b>Female Tutor</b><small>Female only</small>
+          </button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>2 · Class <i>*</i></h2>
+        <div class="chips tight" id="classChips" role="group" aria-label="Class"></div>
+        <div class="extra" id="classOther"><input type="text" id="classOtherInput" placeholder="Type the class, e.g. B.Com 1st Year" maxlength="40"></div>
+        <div class="err" id="errClass">Please choose the class.</div>
+      </section>
+
+      <section class="card">
+        <h2>3 · Board <i>*</i></h2>
+        <div class="chips" id="boardChips" role="group" aria-label="Board"></div>
+        <div class="extra" id="boardOther"><input type="text" id="boardOtherInput" placeholder="Type the board" maxlength="40"></div>
+        <div class="err" id="errBoard">Please choose the board.</div>
+      </section>
+
+      <section class="card">
+        <h2>4 · Subject <i>*</i></h2>
+        <input type="text" id="subject" placeholder="e.g. Maths, Science" maxlength="120" enterkeyhint="next">
+        <div class="suggest">
+          <div class="suggest-lab">Tap to add:</div>
+          <div class="chips" id="subjectChips"></div>
+        </div>
+        <div class="err" id="errSubject">Please add at least one subject.</div>
+      </section>
+
+      <section class="card">
+        <h2>5 · Where? <i>*</i></h2>
+        <label class="field">
+          <div class="lab">City</div>
+          <input type="text" id="city" placeholder="e.g. New Delhi" maxlength="60" autocapitalize="words" enterkeyhint="next">
+          <div class="err" id="errCity">Please enter the city.</div>
+        </label>
+        <label class="field">
+          <div class="lab">Location <span>area / locality</span></div>
+          <input type="text" id="location" placeholder="e.g. Gandhi Vihar, Mukherjee Nagar" maxlength="120" autocapitalize="words" enterkeyhint="next">
+          <div class="err" id="errLocation">Please enter the location.</div>
+        </label>
+        <label class="field">
+          <div class="lab">Pin code <span id="pinCount">0/6</span></div>
+          <input type="tel" id="pin" inputmode="numeric" pattern="[0-9]*" placeholder="6 digits" maxlength="6" enterkeyhint="done">
+          <div class="err" id="errPin">The pin code must be exactly 6 digits.</div>
+        </label>
+      </section>
+
+      <div class="err" id="errSend" style="text-align:center;margin-bottom:12px"></div>
+    </form>
+  </div>
+
+  <!-- success -->
+  <section id="done" aria-live="polite">
+    <div class="tick">✓</div>
+    <h2>Request sent!</h2>
+    <p>Your 2 posters and the caption will arrive in the bot chat in a few seconds.</p>
+    <button type="button" class="btn2 solid" id="again">Create another</button>
+    <button type="button" class="btn2" id="close">Close</button>
+  </section>
+</div>
+
+<div class="bar">
+  <div class="wrap"><button class="go" id="go" type="button"><span class="spin"></span><span id="goText">Create posters</span></button></div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // The form talks to one Supabase function. It only accepts requests that carry Telegram's signed
+  // launch data, so this address is safe to be public.
+  var SUBMIT_URL = "https://uucmngomvppbjnfnbsvn.supabase.co/functions/v1/submit-ad";
+
+  var tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+  var initData = tg && tg.initData ? tg.initData : "";
+  if (tg) {
+    try { tg.ready(); tg.expand(); tg.setHeaderColor("#ffffff"); tg.setBackgroundColor("#fffaf9"); } catch (e) {}
+  }
+  var $ = function (id) { return document.getElementById(id); };
+  var haptic = function (kind) { try { tg.HapticFeedback.impactOccurred(kind || "light"); } catch (e) {} };
+
+  if (!initData) $("outside").classList.add("show");
+
+  var CLASSES = ["Nursery", "LKG", "UKG", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "Other"];
+  var BOARDS = ["CBSE", "ICSE", "ISC", "IGCSE", "IB", "NIOS", "State Board", "Other"];
+  var SUBJECTS = ["All Subjects", "Maths", "Science", "English", "Hindi", "Physics", "Chemistry", "Biology", "Social Science", "Accountancy", "Economics", "Computer"];
+
+  var state = { type: "home", cls: "", board: "" };
+
+  function chip(text, pressed, cls) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "chip" + (cls ? " " + cls : ""); b.textContent = text;
+    b.setAttribute("aria-pressed", pressed ? "true" : "false");
+    return b;
+  }
+
+  // ----- single choice chips (class, board) -----
+  function buildSingle(containerId, items, key, otherId, otherInputId) {
+    var box = $(containerId);
+    items.forEach(function (name) {
+      var b = chip(name, false);
+      b.addEventListener("click", function () {
+        state[key] = name; haptic();
+        [].forEach.call(box.children, function (c) { c.setAttribute("aria-pressed", c === b ? "true" : "false"); });
+        $(otherId).classList.toggle("show", name === "Other");
+        if (name === "Other") $(otherInputId).focus();
+        clearErr(key === "cls" ? "errClass" : "errBoard"); render();
+      });
+      box.appendChild(b);
+    });
+  }
+  buildSingle("classChips", CLASSES, "cls", "classOther", "classOtherInput");
+  buildSingle("boardChips", BOARDS, "board", "boardOther", "boardOtherInput");
+
+  // ----- subject suggestions add to the text box -----
+  var subjectChips = $("subjectChips");
+  function subjectList() { return $("subject").value.split(",").map(function (s) { return s.trim(); }).filter(Boolean); }
+  function syncSubjectChips() {
+    var have = subjectList().map(function (s) { return s.toLowerCase(); });
+    [].forEach.call(subjectChips.children, function (c) {
+      c.setAttribute("aria-pressed", have.indexOf(c.textContent.toLowerCase()) >= 0 ? "true" : "false");
+    });
+  }
+  SUBJECTS.forEach(function (name) {
+    var b = chip(name, false, "soft");
+    b.addEventListener("click", function () {
+      var list = subjectList(), i = list.map(function (s) { return s.toLowerCase(); }).indexOf(name.toLowerCase());
+      if (i >= 0) list.splice(i, 1); else list.push(name);
+      $("subject").value = list.join(", "); haptic(); clearErr("errSubject"); syncSubjectChips(); render();
+    });
+    subjectChips.appendChild(b);
+  });
+
+  // ----- tutor type -----
+  [].forEach.call(document.querySelectorAll(".type"), function (btn) {
+    btn.addEventListener("click", function () {
+      state.type = btn.dataset.type; haptic();
+      [].forEach.call(document.querySelectorAll(".type"), function (o) { o.setAttribute("aria-pressed", o === btn ? "true" : "false"); });
+      render();
+    });
+  });
+
+  // ----- values -----
+  function classValue() { return state.cls === "Other" ? $("classOtherInput").value.trim() : state.cls; }
+  function boardValue() { return state.board === "Other" ? $("boardOtherInput").value.trim() : state.board; }
+  function ordinal(c) { return /^\d+$/.test(c) ? c + (c === "1" ? "st" : c === "2" ? "nd" : c === "3" ? "rd" : "th") : c; }
+  function val(id) { return $(id).value.trim(); }
+
+  // ----- live preview -----
+  function setPrev(id, text, placeholder) {
+    var el = $(id); el.textContent = text || placeholder; el.classList.toggle("empty", !text);
+  }
+  function render() {
+    $("pBadge").textContent = state.type === "female" ? "FEMALE TUTOR" : "HOME TUTOR";
+    var c = classValue(), b = boardValue();
+    setPrev("pClass", c ? ("Class " + ordinal(c) + (b ? " · " + b : "")).replace("Class Nursery", "Nursery").replace("Class LKG", "LKG").replace("Class UKG", "UKG") : "", "Choose a class");
+    setPrev("pSubject", val("subject"), "Add a subject");
+    setPrev("pCity", val("city"), "Add a city");
+    setPrev("pLocation", val("location"), "Add a location");
+    setPrev("pPin", val("pin"), "6 digits");
+    $("pinCount").textContent = val("pin").length + "/6";
+  }
+  ["subject", "city", "location", "classOtherInput", "boardOtherInput"].forEach(function (id) {
+    $(id).addEventListener("input", function () {
+      $(id).classList.remove("bad");
+      var errFor = { subject: "errSubject", city: "errCity", location: "errLocation", classOtherInput: "errClass", boardOtherInput: "errBoard" }[id];
+      if (errFor) clearErr(errFor);
+      if (id === "subject") syncSubjectChips();
+      render();
+    });
+  });
+  $("pin").addEventListener("input", function () {
+    this.value = this.value.replace(/\D/g, "").slice(0, 6); this.classList.remove("bad"); clearErr("errPin"); render();
+  });
+
+  // remember the last city on this phone
+  try { var lastCity = localStorage.getItem("ad_city"); if (lastCity) $("city").value = lastCity; } catch (e) {}
+  render();
+
+  // ----- validation -----
+  function showErr(id, inputId) { $(id).classList.add("show"); if (inputId) $(inputId).classList.add("bad"); }
+  function clearErr(id) { $(id).classList.remove("show"); }
+  function validate() {
+    var ok = true, first = null;
+    function fail(errId, inputId, scrollTo) { showErr(errId, inputId); ok = false; if (!first) first = scrollTo || $(errId); }
+    if (!classValue()) fail("errClass", state.cls === "Other" ? "classOtherInput" : null, $("classChips"));
+    if (!boardValue()) fail("errBoard", state.board === "Other" ? "boardOtherInput" : null, $("boardChips"));
+    if (!val("subject")) fail("errSubject", "subject", $("subject"));
+    if (!val("city")) fail("errCity", "city", $("city"));
+    if (!val("location")) fail("errLocation", "location", $("location"));
+    if (!/^\d{6}$/.test(val("pin"))) fail("errPin", "pin", $("pin"));
+    if (first) { first.scrollIntoView({ behavior: "smooth", block: "center" }); try { tg.HapticFeedback.notificationOccurred("error"); } catch (e) {} }
+    return ok;
+  }
+
+  // ----- send to Supabase -----
+  var sending = false;
+  function setBusy(b) {
+    sending = b; $("go").disabled = b; $("go").classList.toggle("busy", b);
+    $("goText").textContent = b ? "Sending..." : "Create posters";
+  }
+  async function submit() {
+    if (sending) return;
+    $("errSend").classList.remove("show");
+    if (!initData) { $("outside").classList.add("show"); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+    if (!validate()) return;
+
+    setBusy(true);
+    var body = {
+      init_data: initData,
+      tutor_type: state.type,
+      class_name: classValue(),
+      board: boardValue(),
+      subject: val("subject"),
+      city: val("city"),
+      location: val("location"),
+      pin_code: val("pin")
+    };
+    var ERRORS = {
+      401: "This form must be opened from the Telegram bot. Close it and open it again from the bot.",
+      403: "You are not approved to use this bot yet. Send /start in the chat and wait for approval.",
+      400: "Please check the details and try again."
+    };
+    try {
+      var res = await fetch(SUBMIT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) { var err = new Error("HTTP " + res.status); err.status = res.status; throw err; }
+      try { localStorage.setItem("ad_city", body.city); } catch (e) {}
+      try { tg.HapticFeedback.notificationOccurred("success"); } catch (e) {}
+      document.body.classList.add("is-done");
+      window.scrollTo(0, 0);
+    } catch (e) {
+      var m = $("errSend");
+      m.textContent = ERRORS[e.status] || "Could not send. Check your internet and try again.";
+      m.classList.add("show");
+      try { tg.HapticFeedback.notificationOccurred("error"); } catch (x) {}
+    } finally {
+      setBusy(false);
+    }
+  }
+  $("go").addEventListener("click", submit);
+  $("f").addEventListener("submit", function (e) { e.preventDefault(); submit(); });
+
+  // ----- success screen buttons -----
+  $("again").addEventListener("click", function () {
+    document.body.classList.remove("is-done");
+    ["subject", "location", "pin"].forEach(function (id) { $(id).value = ""; });
+    syncSubjectChips(); render(); window.scrollTo(0, 0);
+  });
+  $("close").addEventListener("click", function () { if (tg) tg.close(); else window.close(); });
+})();
+</script>
+</body>
+</html>
