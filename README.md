@@ -37,7 +37,7 @@ Mini App  --form------------>  Edge Function  submit-ad    --+--> approval check
 Only **admins** (`ADMIN_ID`) and **approved users**. A new person sends `/start`, every admin gets an Approve / Reject
 message, and the person is let in once one admin taps Approve. Admins send `/user` (or `/users`) to see the list:
 it is buttons only, tap a name, then confirm, to remove someone.
-The chat is kept clean: each new message removes the previous questions and answers; only the poster files and
+Privacy: the details of a poster request are never saved (a failure keeps only who and the error). The chat is kept clean: each new message removes the previous questions and answers; only the poster files and
 their caption stay.
 
 For quick tests without approval set the secret `OPEN_ACCESS` = `true` (everyone gets in). Leave it unset normally.

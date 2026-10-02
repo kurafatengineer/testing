@@ -100,9 +100,10 @@ async function ask(d: Deps, chat: number, s: Session, text: string, markup?: unk
 
 /** Both posters + caption. Used by the chat flow and by the Mini App form. */
 export async function deliverPosters(d: Deps, chat: number, data: AdData, source: "chat" | "form") {
-  const log = (status: "done" | "failed", error?: string) => d.db.log({
-    telegram_id: chat, source, tutor_type: data.gender, class_board: data.class_board, subject: data.subject,
-    city: data.city ?? "", location: data.location, pin_code: data.pin, status, error,
+  // Privacy: the request details (class, subject, address, pin) are never saved. After a successful send nothing is
+  // kept; only a failure leaves a small row (who + error) so a problem can be investigated.
+  const logFailure = (error: string) => d.db.log({
+    telegram_id: chat, source, tutor_type: "", class_board: "", subject: "", city: "", location: "", pin_code: "", status: "failed", error,
   });
   try {
     const old = await d.db.getSession(chat); // tidy the chat first (Q&A, form button...) - the posters themselves are kept forever
@@ -110,10 +111,9 @@ export async function deliverPosters(d: Deps, chat: number, data: AdData, source
     await d.tg.typing(chat);
     const [p1, p2] = await d.makePosters(data);
     await d.tg.sendPosters(chat, p1, p2, buildCaption(data));
-    await log("done");
   } catch (e) {
     console.error("poster failed:", e);
-    await log("failed", String((e as Error)?.message ?? e).slice(0, 300));
+    await logFailure(String((e as Error)?.message ?? e).slice(0, 300));
     try {
       const id = await d.tg.sendMessage(chat, FAILED_TEXT);
       await d.db.saveSession(chat, { step: "", data: {}, tracked: [id] });

@@ -122,7 +122,7 @@ function world() {
   check(w.posters[0].caption.includes("Female Tutor Required") && w.posters[0].caption.includes("City: New Delhi") && w.posters[0].caption.includes("Location: Gandhi Vihar"), "caption");
   check(!w.sessions.has(USER), "session cleared");
   check(w.deleted.filter(([c2]) => c2 === USER).length >= 8, "questions and answers cleaned up");
-  check(w.logs.length === 1 && w.logs[0].status === "done" && w.logs[0].source === "chat", "logged");
+  check(w.logs.length === 0, "nothing about the request is kept after a successful send");
 
   // "Hi" again restarts; home type maps to both genders
   await handleUpdate(w.deps, w.text(USER, "hi"));
@@ -192,7 +192,7 @@ function world() {
   check(w.lastTo(STRANGER).text.includes("not approved"), "/form refused for strangers");
   w.failPosters();
   await handleUpdate(w.deps, w.text(USER, "Home Tutor Required\nClass + Board: 1 CBSE\nSubject: Maths\nLocation: X\nPin Code: 110001"));
-  check(w.lastTo(USER).text.includes("could not be created") && w.logs.at(-1)?.status === "failed", "poster failure is reported and logged");
+  check(w.lastTo(USER).text.includes("could not be created") && w.logs.at(-1)?.status === "failed" && w.logs.at(-1)?.subject === "" && w.logs.at(-1)?.location === "" && w.logs.at(-1)?.pin_code === "", "poster failure is reported and logged without the request details");
 }
 
 // ---------------------------------------------------------------- 5. template parser
@@ -230,7 +230,7 @@ function world() {
   const r = await handleSubmit(w.deps, TOKEN, body(), (p) => queue.push(p));
   await Promise.all(queue);
   check(r.status === 200 && w.calls.length === 1 && w.calls[0].gender === "Female" && w.calls[0].class_board === "9 CBSE", "form request accepted and posters made");
-  check(w.posters.length === 1 && w.posters[0].chat === USER && w.logs.at(-1)?.source === "form", "posters sent to the person who filled the form");
+  check(w.posters.length === 1 && w.posters[0].chat === USER && w.logs.length === 0 && w.sessions.size === 0, "posters sent to the person who filled the form, nothing kept");
   check((await handleSubmit(w.deps, TOKEN, body({ init_data: sign(USER, { tamper: true }) }), () => {})).status === 401, "forged form refused (401)");
   check((await handleSubmit(w.deps, TOKEN, body({ init_data: sign(STRANGER) }), () => {})).status === 403, "unapproved user refused (403)");
   for (const bad of [{ pin_code: "12" }, { tutor_type: "x" }, { subject: "  " }, { class_name: "" }]) {
