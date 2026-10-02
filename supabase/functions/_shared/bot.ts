@@ -79,9 +79,6 @@ export function buildCaption(d: AdData): string {
 const fullName = (u: any) => [u?.first_name, u?.last_name].filter(Boolean).join(" ");
 const isAdmin = (d: Deps, id: number) => d.adminIds.has(id);
 export const isApproved = async (d: Deps, id: number) => d.openAccess === true || isAdmin(d, id) || await d.db.isAllowed(id);
-/** Admins get one extra button under the welcome text. */
-const adminMenu = (d: Deps, id: number) =>
-  isAdmin(d, id) ? { inline_keyboard: [[{ text: "👥 Approved Users", callback_data: "users" }]] } : undefined;
 const emptySession = (): Session => ({ step: "", data: {}, tracked: [] });
 
 async function cleanup(d: Deps, chat: number, ids: number[]) {
@@ -143,7 +140,8 @@ async function onMessage(d: Deps, m: any) {
   const uid: number = m.from.id;
 
   if (text.startsWith("/")) {
-    const cmd = text.split(/[\s@]/)[0].toLowerCase();
+    let cmd = text.split(/[\s@]/)[0].toLowerCase();
+    if (cmd === "/user") cmd = "/users";
     if (cmd === "/start") return await onStart(d, m);
     if (!await isApproved(d, uid)) return void await d.tg.sendMessage(uid, REJECT_TEXT);
     if (cmd === "/users" && !isAdmin(d, uid)) return;
@@ -168,7 +166,7 @@ async function onStart(d: Deps, m: any) {
   if (await isApproved(d, chat)) {
     const s = await newTurn(d, chat, m.message_id);
     s.step = ""; s.data = {};
-    s.tracked.push(await d.tg.sendMessage(chat, startText(d.miniappUrl), { parse_mode: "Markdown", reply_markup: adminMenu(d, chat) }));
+    s.tracked.push(await d.tg.sendMessage(chat, startText(d.miniappUrl), { parse_mode: "Markdown" }));
     await d.db.saveSession(chat, s);
     return;
   }
@@ -307,7 +305,7 @@ async function onDecision(d: Deps, q: any, action: "approve" | "reject", userId:
       name = fullName(chat); username = chat?.username ?? "";
     }
     await d.db.addAllowed(userId, name, username);
-    const welcome = await d.tg.sendMessage(userId, startText(d.miniappUrl), { parse_mode: "Markdown", reply_markup: adminMenu(d, userId) });
+    const welcome = await d.tg.sendMessage(userId, startText(d.miniappUrl), { parse_mode: "Markdown" });
     await tidyUp();
     await d.db.saveSession(userId, { step: "", data: {}, tracked: [welcome] });
   } else {

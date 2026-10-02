@@ -173,14 +173,13 @@ function world() {
   await handleUpdate(w.deps, w.text(USER, "Home Tutor Required\nClass + Board: 1 CBSE\nSubject: Maths\nLocation: X\nPin Code: 110001"));
   check(gone(formMsg.id) && w.posters.length === 1, "form button cleaned, posters kept (never deleted)");
 
-  // admin: welcome has a Users button that opens the list
+  // admin: no button on /start, the list comes from /user or /users
   await handleUpdate(w.deps, w.text(1, "/start"));
-  const aw = w.lastTo(1);
-  check(aw.markup.inline_keyboard[0][0].callback_data === "users", "admin has Approved Users button");
-  await handleUpdate(w.deps, w.press(1, "users", 1, aw.id));
-  check(w.lastTo(1).text.includes("Approved users (1)") && gone(aw.id), "button opens the list and clears the welcome");
-  await handleUpdate(w.deps, w.press(USER, "users"));
-  check(!w.sent.some((m) => m.chat === USER && m.text.includes("Approved users")), "users button is admin-only");
+  check(w.lastTo(1).markup === undefined, "no admin button on /start");
+  await handleUpdate(w.deps, w.text(1, "/user"));
+  check(w.lastTo(1).text.includes("Approved users (1)"), "/user opens the list");
+  await handleUpdate(w.deps, w.text(USER, "/user"));
+  check(!w.sent.some((m) => m.chat === USER && m.text.includes("Approved users")), "/user is admin-only");
 }
 
 // ---------------------------------------------------------------- 4. /form + failures

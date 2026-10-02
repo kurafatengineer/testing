@@ -35,8 +35,8 @@ Mini App  --form------------>  Edge Function  submit-ad    --+--> approval check
 ## Who can use the bot
 
 Only **admins** (`ADMIN_ID`) and **approved users**. A new person sends `/start`, every admin gets an Approve / Reject
-message, and the person is let in once one admin taps Approve. Admins see an **Approved Users** button under the
-welcome text (or send `/users`): the list is buttons only, tap a name, then confirm, to remove someone.
+message, and the person is let in once one admin taps Approve. Admins send `/user` (or `/users`) to see the list:
+it is buttons only, tap a name, then confirm, to remove someone.
 The chat is kept clean: each new message removes the previous questions and answers; only the poster files and
 their caption stay.
 
