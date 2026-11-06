@@ -40,7 +40,7 @@ function link(parent, href, label) { const a = document.createElement("a"); a.hr
 async function getJson(url) { const r = await fetch(url, { cache: "no-store" }); if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }
 
 // Apps Script Web App का /exec पता। खाली हो तो पहली बार पूछेगा और फ़ोन में याद रखेगा।
-const APPS_SCRIPT_URL = "";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyRP4WC23dmnYcUwD16HnSe3eUPwDytA9MhKl0SgccbeVLqpZV-dS6gcL8JW8L5cBaS/exec";
 let LAST = [];
 const statusBox = document.getElementById("status");
 function setStatus(msg, cls) { statusBox.innerHTML = ""; const d = document.createElement("div"); d.className = "card" + (cls ? " " + cls : ""); d.textContent = msg; statusBox.appendChild(d); }
