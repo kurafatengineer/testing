@@ -143,6 +143,11 @@
     width:min(92vw, 560px); padding:14px 18px; border-radius:20px; background:var(--inv-bg); color:var(--inv-ink);
     font-size:14px; line-height:1.4; opacity:0; pointer-events:none; transition:.25s; z-index:30; text-align:center; }
   #toast.on { opacity:1; transform:translate(-50%,0); }
+  .modebar { display:flex; justify-content:center; padding:2px 0 4px; }
+  .modechip { display:inline-flex; align-items:center; gap:7px; height:32px; padding:0 14px; border-radius:999px; border:1px solid var(--line);
+    background:transparent; color:var(--muted); font-size:12.5px; font-weight:600; }
+  .modechip.public { color:var(--ok); }
+  .modechip:disabled { opacity:.5; }
   .lock { text-align:center; padding:72px 24px; color:var(--muted); }
   .lock .ring { width:72px; height:72px; margin:0 auto 18px; border-radius:50%; background:var(--tile); color:var(--ink); display:grid; place-items:center; }
   .lock h2 { margin:0 0 6px; color:var(--ink); font-size:20px; letter-spacing:-.01em; }
@@ -159,6 +164,7 @@
 <header>
   <div class="wrap">
     <h1>UPSC CSE Test Series 2027</h1>
+    <div class="modebar" id="modebar" hidden><button class="modechip" id="modeBtn" aria-live="polite"></button></div>
     <div class="row" id="sites" role="tablist" aria-label="Websites"></div>
     <div class="search"><div class="sbox" id="sbox">
       <div class="field">
@@ -252,6 +258,7 @@ let cur = Math.min(Math.max(store.get("cur", 0), 0), allSites().length - 1);
 const data = new Map();            // site url -> {items: Map, page, done, loading, error}
 let seen = new Set(), seenKnown = false;
 let issues = {};
+let mode = "private", isOwner = false;   // Private / Public (only the owner can change it)
 let denied = false;                // the server said this Telegram account is not the owner
 let pending = new Set();           // posts waiting in the Apps Script queue (sent in the background)                   // post key -> why its PDF could not be sent (kept by the Apps Script)
 const failedNow = new Set();       // posts that failed to send in this session
@@ -331,6 +338,7 @@ async function callScript(body) {
 
 function applyStatus(j) {
   seen = new Set(j.seen || []); issues = j.issues || {}; pending = new Set(j.pendingIds || []); seenKnown = true;
+  mode = j.mode === "public" ? "public" : "private"; isOwner = !!j.owner;
 }
 
 async function refreshStatus() {
@@ -453,6 +461,13 @@ function render() {
       h("h2", {}, "Private app"), h("p", {}, "This app is only for its owner.")));
     return;
   }
+  const mb = $("modebar"); mb.hidden = !(isOwner && seenKnown);
+  if (!mb.hidden) {
+    const chip = $("modeBtn"); chip.classList.toggle("public", mode === "public");
+    chip.replaceChildren(icon(mode === "public" ? "globe" : "lock", 15, 2),
+      mode === "public" ? "Public \u00b7 anyone can use this app" : "Private \u00b7 only you");
+    chip.title = chip.ariaLabel = "Tap to make it " + (mode === "public" ? "private" : "public");
+  }
   renderSites();
   $("icoSearch").replaceChildren(icon("search", 18));
   $("clear").replaceChildren(icon("close", 12, 3.2)); $("clear").hidden = !query;
@@ -552,6 +567,14 @@ $("q").addEventListener("keydown", e => {
   if (e.key === "Escape") { suggestOpen = false; renderSuggest(); }
 });
 $("clear").addEventListener("click", () => { query = ""; $("q").value = ""; suggestOpen = false; render(); });
+$("modeBtn").addEventListener("click", async () => {
+  const next = mode === "public" ? "private" : "public", btn = $("modeBtn");
+  if (next === "public" && !confirm("Make this app PUBLIC?\n\nAnyone who opens the bot will be able to use it. Their files go to their own Telegram chat, with a daily limit.")) return;
+  btn.disabled = true; toast("Switching...", 0);
+  try { applyStatus(await callScript({ action: "setMode", mode: next })); toast(next === "public" ? "The app is now Public" : "The app is now Private"); }
+  catch (e) { toast(e.message, 6000); }
+  btn.disabled = false; render();
+});
 $("scrim").addEventListener("click", () => { suggestOpen = false; $("q").blur(); renderSuggest(); });
 $("sendNew").addEventListener("click", () => sendItems([...stateOf(site()).items.values()].filter(i => !seen.has(i.key) && !pending.has(i.key)).sort((a, b) => b.time - a.time), false));
 window.addEventListener("resize", fitNames);

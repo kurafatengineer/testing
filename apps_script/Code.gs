@@ -30,12 +30,36 @@ function cfg_(key, fallback) {
 }
 
 // ---------------------------------------------------------- कौन इस्तेमाल कर सकता है
-// सिर्फ़ मालिक (TELEGRAM_CHAT_ID वाला निजी खाता)। और लोगों को जोड़ना हो तो Script property
-// ALLOWED_USER_IDS में उनके Telegram user id कॉमा से अलग करके डालिए।
-function isAllowed_(userId, chat) {
-  var extra = String(cfg_('ALLOWED_USER_IDS', '')).split(',').map(function (x) { return x.trim(); }).filter(Boolean);
-  if (extra.indexOf(String(userId)) !== -1) return true;
-  return String(chat).charAt(0) !== '-' && String(userId) === String(chat);
+// मालिक = TELEGRAM_CHAT_ID वाला निजी खाता। मालिक Mini App से ही Private / Public बदल सकता है (Script property MODE)।
+//   Private: सिर्फ़ मालिक (+ ALLOWED_USER_IDS में लिखे Telegram user id, कॉमा से अलग)।
+//   Public : बॉट खोलने वाला हर व्यक्ति। उसकी फ़ाइलें उसके अपने चैट में जाती हैं और उसका "भेजी गई" हिसाब
+//            अलग रहता है। बाहरी व्यक्ति के लिए रोज़ की सीमा DAILY_LIMIT (डिफ़ॉल्ट 30 पोस्ट) है।
+
+function getMode_() { return cfg_('MODE', 'private') === 'public' ? 'public' : 'private'; }
+function setMode_(mode) { PropertiesService.getScriptProperties().setProperty('MODE', mode === 'public' ? 'public' : 'private'); }
+
+function isOwner_(userId, chat) { return String(chat).charAt(0) !== '-' && String(userId) === String(chat); }
+
+/** लौटाता है { ok, owner, ns, chat }: ns = इस व्यक्ति के डेटा का उपसर्ग, chat = उसकी फ़ाइलें कहाँ जाएँगी। */
+function authorize_(userId, chat) {
+  if (isOwner_(userId, chat)) return { ok: true, owner: true, ns: '', chat: String(chat) };
+  var listed = String(cfg_('ALLOWED_USER_IDS', '')).split(',').map(function (x) { return x.trim(); }).filter(Boolean)
+                 .indexOf(String(userId)) !== -1;
+  if (listed || getMode_() === 'public') return { ok: true, owner: false, ns: 'u' + userId + ':', chat: String(userId) };
+  return { ok: false, owner: false };
+}
+
+// रोज़ की सीमा (सिर्फ़ मालिक के अलावा लोगों पर)
+function today_() { return new Date().toISOString().slice(0, 10); }
+function quotaLeft_(userId) {
+  var limit = Number(cfg_('DAILY_LIMIT', '30')) || 30;
+  var cur = String(PropertiesService.getScriptProperties().getProperty('lim_' + userId) || '').split('|');
+  var used = cur[0] === today_() ? Number(cur[1]) || 0 : 0;
+  return { limit: limit, used: used, left: Math.max(0, limit - used) };
+}
+function useQuota_(userId, n) {
+  var q = quotaLeft_(userId);
+  PropertiesService.getScriptProperties().setProperty('lim_' + userId, today_() + '|' + (q.used + n));
 }
 
 // Telegram के संदेश (Hi / Start) इसी Web App पर आते हैं। पता गुप्त कुंजी (?k=...) से सुरक्षित रहता है,
@@ -57,7 +81,7 @@ function setupWebhook() {
   Logger.log(res.getContentText().replace(token, '***'));
 }
 
-/** Telegram का एक संदेश: मालिक को स्वागत, बाकी सबको "यह निजी बॉट है"। */
+/** Telegram का एक संदेश (Hi / Start): मालिक को स्वागत; Public में सबको स्वागत; Private में "निजी बॉट" का संदेश। */
 function handleUpdate_(update, token, chat) {
   var msg = update.message;
   if (!msg || !msg.from || !msg.chat || msg.chat.type !== 'private' || msg.from.is_bot) return;
@@ -67,60 +91,71 @@ function handleUpdate_(update, token, chat) {
   props.setProperty('last_update', String(update.update_id));
 
   var name = esc_(String(msg.from.first_name || 'there').slice(0, 40));
-  if (isAllowed_(msg.from.id, chat)) {
+  var auth = authorize_(msg.from.id, chat);
+  if (auth.ok && auth.owner) {
     tgMessage_(token, msg.chat.id, '👋 Welcome back, <b>' + name + '</b>!\n\n' +
       'Tap the <b>menu button</b> next to the message box to open your Test Series app. ' +
       'From there you can pick files and they will be sent to this chat.');
     return;
   }
-  var cache = CacheService.getScriptCache(), k = 'visitor:' + msg.from.id;
+  var cache = CacheService.getScriptCache(), k = 'greeted:' + msg.from.id;
   if (cache.get(k)) return;                                  // एक ही व्यक्ति को बार-बार जवाब नहीं
   cache.put(k, '1', 21600);
+  if (auth.ok) {
+    tgMessage_(token, msg.chat.id, '👋 Hi <b>' + name + '</b>, welcome!\n\n' +
+      'Tap the <b>menu button</b> next to the message box to open the UPSC CSE Test Series app. ' +
+      'Pick any file there and it will be sent to <b>this chat</b>.');
+    return;
+  }
   tgMessage_(token, msg.chat.id, '👋 Hi <b>' + name + '</b>!\n\n' +
-    '🔒 This is a <b>private bot</b>. It sends UPSC CSE test series files to its owner only, ' +
+    '🔒 This is a <b>private bot</b> for now. It sends UPSC CSE test series files to its owner only, ' +
     'so there is nothing here for you to start or download.\n\n' +
     'Thanks for stopping by!');
 }
 
-// -------------------------------------------------- "भेजी जा चुकी" सूची
+// -------------------------------------------------- "भेजी जा चुकी" सूची (हर व्यक्ति की अलग)
+// ns = '' मालिक के लिए (पुरानी सूची वैसी ही रहती है), बाकी के लिए 'u<id>:'।
 // Script property की सीमा 9 KB है, इसलिए सूची कई टुकड़ों में रखी जाती है।
 
-function loadSeen_() {
+function loadSeen_(ns) {
+  ns = ns || '';
   var props = PropertiesService.getScriptProperties();
-  var n = props.getProperty('seen_n');
+  var n = props.getProperty(ns + 'seen_n');
   var raw = '';
   if (n !== null) {
-    for (var i = 0; i < Number(n); i++) raw += props.getProperty('seen_' + i) || '';
-  } else {
+    for (var i = 0; i < Number(n); i++) raw += props.getProperty(ns + 'seen_' + i) || '';
+  } else if (!ns) {
     raw = props.getProperty('seen') || '';
   }
   try { return raw ? JSON.parse(raw) : []; } catch (e) { return []; }
 }
 
-function saveSeen_(seen) {
+function saveSeen_(seen, ns) {
+  ns = ns || '';
+  if (ns && seen.length > 500) seen.splice(0, seen.length - 500);   // बाहरी लोगों के लिए सीमा
   var props = PropertiesService.getScriptProperties();
-  var old = Number(props.getProperty('seen_n') || 0);
+  var old = Number(props.getProperty(ns + 'seen_n') || 0);
   var raw = JSON.stringify(seen), parts = [];
   for (var i = 0; i < raw.length; i += 8000) parts.push(raw.slice(i, i + 8000));
-  parts.forEach(function (p, k) { props.setProperty('seen_' + k, p); });
-  for (var j = parts.length; j < old; j++) props.deleteProperty('seen_' + j);
-  props.setProperty('seen_n', String(parts.length));
-  props.deleteProperty('seen');
+  parts.forEach(function (p, k) { props.setProperty(ns + 'seen_' + k, p); });
+  for (var j = parts.length; j < old; j++) props.deleteProperty(ns + 'seen_' + j);
+  props.setProperty(ns + 'seen_n', String(parts.length));
+  if (!ns) props.deleteProperty('seen');
 }
 
 // उन पोस्ट की सूची जिनकी कोई PDF नहीं जा सकी: { postId: "short reason" } (Mini App में लाल दिखती हैं)
-function loadIssues_() {
-  var raw = PropertiesService.getScriptProperties().getProperty('issues');
+function loadIssues_(ns) {
+  var raw = PropertiesService.getScriptProperties().getProperty((ns || '') + 'issues');
   try { return raw ? JSON.parse(raw) : {}; } catch (e) { return {}; }
 }
 
-function saveIssues_(issues) {
+function saveIssues_(issues, ns) {
   var keys = Object.keys(issues);
   keys.slice(0, Math.max(0, keys.length - 60)).forEach(function (k) { delete issues[k]; });   // 9 KB सीमा
-  PropertiesService.getScriptProperties().setProperty('issues', JSON.stringify(issues));
+  PropertiesService.getScriptProperties().setProperty((ns || '') + 'issues', JSON.stringify(issues));
 }
 
-/** "भेजी हुई" सूची मिटाता है; Mini App में सारे टिक हट जाएँगे। */
+/** मालिक की "भेजी हुई" सूची, लाल निशान और कतार मिटाता है; Mini App में सारे टिक हट जाएँगे। */
 function resetSeen() {
   var props = PropertiesService.getScriptProperties();
   var n = Number(props.getProperty('seen_n') || 0);
@@ -338,16 +373,20 @@ function doGet() { return reply_({ ok: true, info: 'UPSC bot web app is running'
 // ------------------------------------------------------------- कतार (queue)
 // हर पोस्ट एक अलग property ('q:'+hash) में रहती है। Mini App पोस्ट कतार में डालकर छुट्टी पा लेता है;
 // भेजने का काम यहीं पीछे चलता रहता है, चाहे पेज बंद हो जाए।
+// पोस्ट के साथ ns (किसका हिसाब), chat (कहाँ भेजना) और uid रहते हैं।
 
-function queueKey_(id) {
-  return 'q:' + toHex_(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, String(id), Utilities.Charset.UTF_8));
+function queueKey_(ns, id) {
+  return 'q:' + toHex_(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, String(ns || '') + '|' + String(id), Utilities.Charset.UTF_8));
 }
 
-function queueEntries_() {
+function queueEntries_(ns) {
   var props = PropertiesService.getScriptProperties(), all = props.getProperties(), out = [];
   Object.keys(all).forEach(function (k) {
     if (k.indexOf('q:') !== 0) return;
-    try { out.push({ key: k, post: JSON.parse(all[k]) }); } catch (e) { props.deleteProperty(k); }
+    try {
+      var post = JSON.parse(all[k]);
+      if (ns === undefined || (post.ns || '') === ns) out.push({ key: k, post: post });
+    } catch (e) { props.deleteProperty(k); }
   });
   out.sort(function (a, b) { return a.post.time - b.post.time; });   // पुरानी पोस्ट पहले
   return out;
@@ -382,29 +421,33 @@ function processQueue_(budgetMs) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(2000)) return -1;
   try {
-    var token = cfg_('TELEGRAM_BOT_TOKEN'), chat = cfg_('TELEGRAM_CHAT_ID');
+    var token = cfg_('TELEGRAM_BOT_TOKEN'), owner = cfg_('TELEGRAM_CHAT_ID');
     var props = PropertiesService.getScriptProperties();
     var started = Date.now();
-    var seen = loadSeen_(), issues = loadIssues_();
+    var people = {};                                         // ns -> { seen, issues }
+    function me(ns) { return people[ns] || (people[ns] = { seen: loadSeen_(ns), issues: loadIssues_(ns) }); }
     var entries = queueEntries_();
     for (var i = 0; i < entries.length; i++) {
       if (Date.now() - started > budgetMs) break;
-      var key = entries[i].key, p = entries[i].post;
-      if (!p.force && seen.indexOf(p.id) !== -1) { props.deleteProperty(key); continue; }
+      var key = entries[i].key, p = entries[i].post, ns = p.ns || '', target = p.chat || owner;
+      if (ns && !authorize_(p.uid, owner).ok) { props.deleteProperty(key); continue; }   // मोड Private हो गया: बाहरी की कतार छोड़ो
+      var st = me(ns);
+      if (!p.force && st.seen.indexOf(p.id) !== -1) { props.deleteProperty(key); continue; }
       try {
-        var problem = deliver_(p, token, chat);
-        if (seen.indexOf(p.id) === -1) seen.push(p.id);
-        saveSeen_(seen);
-        if (problem) issues[p.id] = String(problem).slice(0, 60); else delete issues[p.id];
-        saveIssues_(issues);
+        var problem = deliver_(p, token, target);
+        if (st.seen.indexOf(p.id) === -1) st.seen.push(p.id);
+        saveSeen_(st.seen, ns);
+        if (problem) st.issues[p.id] = String(problem).slice(0, 60); else delete st.issues[p.id];
+        saveIssues_(st.issues, ns);
         props.deleteProperty(key);
       } catch (err) {
         var msg = String(err.message).replace(token, '***');
         Logger.log('ERROR: ' + msg);
-        p.tries = (p.tries || 0) + 1;
+        var notStarted = /can't initiate|bot was blocked|chat not found|user is deactivated/i.test(msg);
+        p.tries = notStarted ? 2 : (p.tries || 0) + 1;
         if (p.tries >= 2) {                                   // दो बार फेल: छोड़ दो और Mini App में लाल दिखाओ
-          issues[p.id] = ('Sending failed: ' + msg).slice(0, 60);
-          saveIssues_(issues);
+          st.issues[p.id] = (notStarted ? 'Sending failed: open the bot chat and tap Start first' : 'Sending failed: ' + msg).slice(0, 60);
+          saveIssues_(st.issues, ns);
           props.deleteProperty(key);
         } else {
           props.setProperty(key, JSON.stringify(p));
@@ -417,17 +460,19 @@ function processQueue_(budgetMs) {
   }
 }
 
-function statusReply_() {
-  return { ok: true, seen: loadSeen_(), issues: loadIssues_(),
-           pendingIds: queueEntries_().map(function (q) { return q.post.id; }) };
+function statusReply_(auth) {
+  return { ok: true, seen: loadSeen_(auth.ns), issues: loadIssues_(auth.ns),
+           pendingIds: queueEntries_(auth.ns).map(function (q) { return q.post.id; }),
+           mode: getMode_(), owner: auth.owner };
 }
 
 /**
- * body = { initData, action: 'status' | 'send', posts: [...], force: bool, start: bool }
- *  status -> { ok, seen: [ids], issues: { id: reason }, pendingIds: [ids] }
- *  send   -> posts को कतार में डालता है ( force=true: "भेजी हुई" को अनदेखा करके फिर से भेजना )।
- *            start=false सिर्फ़ कतार में डालता है; आख़िरी टुकड़े (start != false) पर भेजना शुरू होता है।
- *            जवाब = status जैसा + { queued, already }। बाकी काम पीछे चलता रहता है।
+ * body = { initData, action: 'status' | 'send' | 'setMode', posts: [...], force: bool, start: bool, mode: 'public'|'private' }
+ *  status  -> { ok, seen: [ids], issues: { id: reason }, pendingIds: [ids], mode, owner }
+ *  send    -> posts को कतार में डालता है ( force=true: "भेजी हुई" को अनदेखा करके फिर से भेजना )।
+ *             start=false सिर्फ़ कतार में डालता है; आख़िरी टुकड़े (start != false) पर भेजना शुरू होता है।
+ *             जवाब = status जैसा + { queued, already }। बाकी काम पीछे चलता रहता है।
+ *  setMode -> सिर्फ़ मालिक: Private / Public बदलता है, जवाब = status।
  */
 function doPost(e) {
   try {
@@ -442,30 +487,44 @@ function doPost(e) {
     }
 
     var user = verifyInitData_(body.initData, token);
-    if (!isAllowed_(user.id, chat)) throw new Error('not allowed');
+    var auth = authorize_(user.id, chat);
+    if (!auth.ok) throw new Error('not allowed');
 
-    if (body.action === 'status') return reply_(statusReply_());
+    if (body.action === 'status') return reply_(statusReply_(auth));
+
+    if (body.action === 'setMode') {
+      if (!auth.owner) throw new Error('not allowed');
+      setMode_(body.mode);
+      return reply_(statusReply_(auth));
+    }
 
     var props = PropertiesService.getScriptProperties();
     var force = body.force === true;
-    var seen = loadSeen_();
+    var seen = loadSeen_(auth.ns);
     var waiting = queueEntries_().length;
-    var toAdd = {}, added = 0, already = 0;
-    cleanPosts_(body.posts).forEach(function (p) {
-      if (!force && seen.indexOf(p.id) !== -1) { already++; return; }
-      p.force = force; p.tries = 0;
-      toAdd[queueKey_(p.id)] = JSON.stringify(p);
-      added++;
+    var posts = cleanPosts_(body.posts), fresh = [], already = 0;
+    posts.forEach(function (p) {
+      if (!force && seen.indexOf(p.id) !== -1) already++; else fresh.push(p);
     });
-    if (waiting + added > QUEUE_MAX) throw new Error('Too many files are already waiting. Please try again in a few minutes.');
-    if (added) props.setProperties(toAdd);
+    if (!auth.owner && fresh.length) {                       // बाहरी व्यक्ति: रोज़ की सीमा
+      var q = quotaLeft_(user.id);
+      if (!q.left) throw new Error('Daily limit reached (' + q.limit + ' posts). Please try again tomorrow.');
+      fresh = fresh.slice(0, q.left);
+    }
+    if (waiting + fresh.length > QUEUE_MAX) throw new Error('Too many files are already waiting. Please try again in a few minutes.');
+    var toAdd = {};
+    fresh.forEach(function (p) {
+      p.force = force; p.tries = 0; p.ns = auth.ns; p.chat = auth.chat; p.uid = String(user.id);
+      toAdd[queueKey_(auth.ns, p.id)] = JSON.stringify(p);
+    });
+    if (fresh.length) { props.setProperties(toAdd); if (!auth.owner) useQuota_(user.id, fresh.length); }
 
-    if (body.start !== false && (added || waiting)) {
+    if (body.start !== false && (fresh.length || waiting)) {
       scheduleRun_(60000);                                   // safety net: keeps going even if this request is cut off
       var left = processQueue_(INLINE_BUDGET_MS);            // first files go out right away
       if (left !== 0) scheduleRun_(1000); else removeRunTriggers_();
     }
-    var r = statusReply_(); r.queued = added; r.already = already;
+    var r = statusReply_(auth); r.queued = fresh.length; r.already = already;
     return reply_(r);
   } catch (err) {
     var msg = String(err.message);
