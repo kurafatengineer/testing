@@ -10,13 +10,13 @@
   :root {
     --bg:#ffffff; --ink:#0a0a0a; --muted:#6b6b6b; --line:#e4e4e4; --card:#fafafa;
     --inv-bg:#0a0a0a; --inv-ink:#ffffff; --ok:#15803d; --ok-bg:#eefaf1; --ok-line:#b7e4c4; --bad:#b91c1c; --bad-bg:#fff1f1; --bad-line:#f3b8b8;
-    --shadow:0 10px 30px rgba(0,0,0,.12);
+    --shadow:0 10px 30px rgba(0,0,0,.12); --link:#1a6cf0;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg:#000000; --ink:#f5f5f5; --muted:#8e8e8e; --line:#262626; --card:#0e0e0e;
       --inv-bg:#f5f5f5; --inv-ink:#000000; --ok:#4ade80; --ok-bg:#08170d; --ok-line:#1b4d2b; --bad:#f87171; --bad-bg:#1a0808; --bad-line:#5c1d1d;
-      --shadow:0 10px 30px rgba(0,0,0,.6);
+      --shadow:0 10px 30px rgba(0,0,0,.6); --link:#7ab0ff;
     }
   }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -44,7 +44,7 @@
   .round { flex:none; width:40px; height:40px; border-radius:50%; border:1px solid var(--line); background:transparent;
     display:grid; place-items:center; color:var(--muted); }
 
-  .search { position:relative; margin-top:2px; }
+  .search { position:relative; margin-top:2px; perspective:900px; }
   .search .ico { position:absolute; left:16px; top:14px; color:var(--muted); pointer-events:none; }
   .search input { width:100%; height:48px; padding:0 44px 0 44px; border-radius:999px; border:1px solid var(--line);
     background:var(--card); outline:none; font-size:16px; }
@@ -54,7 +54,9 @@
   .clear { position:absolute; right:7px; top:7px; width:34px; height:34px; border-radius:50%; border:0; background:transparent;
     color:var(--muted); display:grid; place-items:center; }
   .suggest { position:absolute; left:0; right:0; top:54px; max-height:min(52vh, 340px); overflow-y:auto; background:var(--bg);
-    border:1px solid var(--line); border-radius:22px; box-shadow:var(--shadow); padding:6px; z-index:20; }
+    border:1px solid var(--line); border-radius:22px; box-shadow:var(--shadow); padding:6px; z-index:20;
+    transform-origin:50% 0; animation:unfold .34s cubic-bezier(.2,.9,.25,1); }
+  @keyframes unfold { from { opacity:0; transform:rotateX(-70deg) translateY(-10px); } to { opacity:1; transform:none; } }
   .sg { width:100%; display:flex; align-items:center; gap:10px; min-height:48px; padding:6px 12px; border:0; border-radius:16px;
     background:transparent; text-align:left; }
   .sg:active, .sg:hover { background:var(--card); }
@@ -108,13 +110,22 @@
     display:flex; align-items:center; gap:10px; min-height:54px; padding:0 24px 0 20px; border:0; border-radius:999px;
     background:var(--inv-bg); color:var(--inv-ink); font-weight:650; font-size:16px; box-shadow:var(--shadow); white-space:nowrap; }
   .fab:disabled { opacity:.55; }
-  .panel { margin:10px 0 0; padding:16px; border:1px solid var(--line); border-radius:22px; background:var(--card); }
-  .panel label { display:block; font-weight:600; margin-bottom:8px; }
-  .panel input { width:100%; height:46px; padding:0 16px; border-radius:999px; border:1px solid var(--line); background:var(--bg); font-size:16px; }
-  .panel p { margin:10px 4px 0; font-size:13px; color:var(--muted); }
-  .panel .btns { display:flex; gap:8px; margin-top:12px; }
-  .btn { min-height:42px; padding:0 20px; border-radius:999px; border:1px solid var(--ink); background:var(--ink); color:var(--bg); font-weight:600; }
-  .btn.ghost { background:transparent; color:var(--ink); border-color:var(--line); font-weight:500; }
+  /* add-website box: the round + grows into this in the same row */
+  .row.adding > * { margin:0; }
+  .addbox { flex:1; min-width:0; height:44px; display:flex; align-items:center; gap:10px; padding:0 5px 0 12px;
+    border:1px solid var(--ink); border-radius:999px; background:var(--card); overflow:hidden;
+    animation:expand .32s cubic-bezier(.2,.8,.2,1); }
+  @keyframes expand { from { max-width:44px; opacity:.4; } to { max-width:700px; opacity:1; } }
+  .fav { flex:none; width:24px; height:24px; display:grid; place-items:center; color:var(--muted); }
+  .fav img { width:20px; height:20px; border-radius:5px; display:block; }
+  .addbox input { flex:1; min-width:0; height:100%; border:0; outline:none; background:transparent; font-size:16px;
+    text-overflow:ellipsis; -webkit-appearance:none; appearance:none; }
+  .addbox input.has { color:var(--link); }
+  .go { flex:none; width:34px; height:34px; border-radius:50%; border:0; background:transparent; color:var(--muted);
+    display:grid; place-items:center; transition:background .2s, color .2s; }
+  .addbox.valid .go { background:var(--ok); color:#fff; }
+  .addbox.busy .go { background:transparent; border:2.5px solid var(--line); border-top-color:var(--ink); animation:spin .8s linear infinite; }
+  .addbox.busy .go svg { display:none; }
   #toast { position:fixed; left:50%; bottom:calc(88px + env(safe-area-inset-bottom)); transform:translate(-50%,24px);
     width:min(92vw, 560px); padding:14px 18px; border-radius:20px; background:var(--inv-bg); color:var(--inv-ink);
     font-size:14px; line-height:1.4; opacity:0; pointer-events:none; transition:.25s; z-index:30; text-align:center; }
@@ -136,12 +147,6 @@
       <input id="q" type="search" inputmode="search" enterkeyhint="search" autocomplete="off" placeholder="Search files, e.g. Vision, Test 5" aria-label="Search files" aria-controls="suggest" aria-autocomplete="list">
       <button class="clear" id="clear" hidden aria-label="Clear search"></button>
       <div class="suggest" id="suggest" role="listbox" hidden></div>
-    </div>
-    <div class="panel" id="addPanel" hidden>
-      <label for="siteUrl">Website address</label>
-      <input id="siteUrl" type="url" inputmode="url" autocapitalize="off" autocomplete="off" placeholder="example.com">
-      <p>Only WordPress websites whose posts contain Google Drive links will work.</p>
-      <div class="btns"><button class="btn" id="addGo">Add</button><button class="btn ghost" id="addCancel">Cancel</button></div>
     </div>
     <p class="hint" id="hint" hidden></p>
   </div>
@@ -192,7 +197,9 @@ const ICONS = {
   check:  ["M5 12.5l4.5 4.5L19 7"],
   link:   ["M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6", "M15 3h6v6", "M10 14 21 3"],
   close:  ["M6 6l12 12", "M18 6 6 18"],
-  alert:  ["M12 7v6", "M12 17.2v.01"]
+  alert:  ["M12 7v6", "M12 17.2v.01"],
+  arrow:  ["M5 12h14", "M13 6l6 6-6 6"],
+  globe:  ["M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z", "M3 12h18", "M12 3c2.5 2.5 3.8 5.5 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.5-3.8-9S9.5 5.5 12 3z"]
 };
 function icon(name, size = 18, width = 2) {
   const NS = "http://www.w3.org/2000/svg", s = document.createElementNS(NS, "svg");
@@ -333,11 +340,19 @@ function matching(q) {
 const visible = () => matching(query);
 
 function renderSites() {
-  const box = $("sites"); box.replaceChildren();
+  const box = $("sites");
+  box.classList.toggle("adding", adding);
+  if (adding) {
+    if (!box.querySelector(".addbox")) { const a = buildAdd(); box.replaceChildren(a.box); a.input.focus(); }
+    return;
+  }
+  box.replaceChildren();
   allSites().forEach((s, n) => box.append(h("button", { class: "pill", role: "tab", "aria-selected": String(n === cur),
     onclick: () => { cur = n; store.set("cur", n); query = ""; $("q").value = ""; render(); if (!stateOf(site()).page) loadMore(); } }, s.name || host(s))));
   box.append(h("button", { class: "round", "aria-label": "Add a website", title: "Add a website",
-    onclick: () => { $("addPanel").hidden = !$("addPanel").hidden; if (!$("addPanel").hidden) $("siteUrl").focus(); } }, icon("plus", 20, 2.2)));
+    onclick: () => { adding = true; renderSites(); } }, icon("plus", 20, 2.2)));
+  const on = box.querySelector('[aria-selected="true"]');          // keep the chosen website in view
+  if (on) requestAnimationFrame(() => { try { on.scrollIntoView({ inline: "center", block: "nearest" }); } catch (e) {} });
 }
 
 function renderSuggest() {
@@ -415,18 +430,60 @@ function render() {
 }
 
 /* ------------------------------ adding websites ------------------------------ */
-async function addSite() {
-  let u = $("siteUrl").value.trim();
-  if (!u) return;
-  if (!/^https?:\/\//i.test(u)) u = "https://" + u;
-  let url; try { url = new URL(u); } catch (e) { toast("That address does not look right"); return; }
-  const s = { name: url.hostname.replace(/^www\./, ""), url: "https://" + url.hostname };
-  if (allSites().some(x => host(x) === host(s))) { toast("This website is already added"); return; }
-  toast("Checking the website...", 0);
-  try { await getJson(api(s) + "/posts?per_page=1&_fields=id"); }
-  catch (e) { toast("Could not open this website, or it is not WordPress (" + e.message + ")", 7000); return; }
-  customSites.push(s); store.set("sites", customSites); cur = allSites().length - 1; store.set("cur", cur);
-  $("addPanel").hidden = true; $("siteUrl").value = ""; query = ""; $("q").value = ""; toast(s.name + " added"); render(); loadMore();
+let adding = false, addBusy = false;
+function parseSite(v) {
+  v = (v || "").trim(); if (!v) return null;
+  if (!/^https?:\/\//i.test(v)) v = "https://" + v;
+  let u; try { u = new URL(v); } catch (e) { return null; }
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(u.hostname)) return null;
+  const name = u.hostname.replace(/^www\./, "");
+  return { name, url: "https://" + u.hostname, short: name + (u.pathname.length > 1 ? u.pathname.replace(/\/$/, "") : "") };
+}
+function closeAdd() { adding = false; renderSites(); }
+
+function buildAdd() {
+  const fav = h("span", { class: "fav" }, icon("globe", 20));
+  const input = h("input", { id: "siteUrl", type: "url", inputmode: "url", autocapitalize: "off", autocomplete: "off",
+    spellcheck: "false", placeholder: "Paste website link", "aria-label": "Website link" });
+  const go = h("button", { class: "go", "aria-label": "Cancel" }, icon("close", 18));
+  const box = h("div", { class: "addbox" }, fav, input, go);
+  let shown = null, valid = false;
+  function sync() {
+    const p = parseSite(input.value);
+    box.classList.toggle("valid", !!p); input.classList.toggle("has", !!p);
+    if (valid !== !!p) {                       // swap the icon only when the state really changes (else a tap can get lost)
+      valid = !!p;
+      go.replaceChildren(icon(valid ? "arrow" : "close", valid ? 20 : 18, valid ? 2.6 : 2));
+      go.setAttribute("aria-label", valid ? "Add this website" : "Cancel");
+    }
+    const name = p ? p.name : "";
+    if (name !== shown) {
+      shown = name;
+      if (!name) fav.replaceChildren(icon("globe", 20));
+      else { const img = h("img", { src: "https://" + name + "/favicon.ico", alt: "", width: 20, height: 20, referrerpolicy: "no-referrer" });
+             img.addEventListener("error", () => fav.replaceChildren(icon("globe", 20))); fav.replaceChildren(img); }
+    }
+    return p;
+  }
+  function shorten() { const p = parseSite(input.value); if (p) input.value = p.short; sync(); }
+  async function submit() {
+    const p = parseSite(input.value); if (!p || addBusy) return;
+    if (allSites().some(x => host(x) === p.name)) { toast("This website is already added"); return; }
+    addBusy = true; box.classList.add("busy");
+    try { await getJson(api(p) + "/posts?per_page=1&_fields=id"); }
+    catch (e) { addBusy = false; box.classList.remove("busy");
+      toast("Could not open this website, or it is not WordPress (" + e.message + ")", 7000); return; }
+    addBusy = false;
+    customSites.push({ name: p.name, url: p.url }); store.set("sites", customSites);
+    cur = allSites().length - 1; store.set("cur", cur); adding = false; query = ""; $("q").value = "";
+    toast(p.name + " added"); render(); loadMore();
+  }
+  input.addEventListener("input", sync);
+  input.addEventListener("paste", () => setTimeout(shorten, 0));
+  input.addEventListener("blur", () => { shorten(); setTimeout(() => { if (!input.value.trim() && !box.contains(document.activeElement) && !addBusy) closeAdd(); }, 150); });
+  input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); submit(); } if (e.key === "Escape") closeAdd(); });
+  go.addEventListener("click", () => { if (parseSite(input.value)) submit(); else closeAdd(); });
+  return { box, input };
 }
 function removeSite() {
   if (cur < BUILTIN.length || !confirm("Remove " + site().name + "?")) return;
@@ -443,9 +500,6 @@ $("q").addEventListener("keydown", e => {
 });
 $("clear").addEventListener("click", () => { query = ""; $("q").value = ""; suggestOpen = false; render(); });
 $("sendNew").addEventListener("click", () => sendItems([...stateOf(site()).items.values()].filter(i => !seen.has(i.key)).sort((a, b) => b.time - a.time), false));
-$("addGo").addEventListener("click", addSite);
-$("addCancel").addEventListener("click", () => { $("addPanel").hidden = true; });
-$("siteUrl").addEventListener("keydown", e => { if (e.key === "Enter") addSite(); });
 window.addEventListener("resize", fitNames);
 
 render(); loadMore(); refreshStatus();
