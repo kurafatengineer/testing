@@ -144,8 +144,8 @@
     font-size:14px; line-height:1.4; opacity:0; pointer-events:none; transition:.25s; z-index:30; text-align:center; }
   #toast.on { opacity:1; transform:translate(-50%,0); }
   .legend { display:flex; justify-content:center; gap:18px; margin:14px 0 0; font-size:12.5px; color:var(--muted); }
-  .legend span { display:inline-flex; align-items:center; gap:7px; }
-  .legend i { width:9px; height:9px; border-radius:50%; display:block; }
+  .legend span { display:inline-flex; align-items:center; gap:7px; line-height:1; }
+  .legend i { width:9px; height:9px; border-radius:50%; display:block; flex:none; position:relative; top:-1.5px; }   /* optical centre of the text, not of its line box */
   body.denied .legend { display:none; }
   .modebar { display:flex; justify-content:center; padding:2px 0 4px; }
   .modechip { display:inline-flex; align-items:center; gap:7px; height:32px; padding:0 14px; border-radius:999px; border:1px solid var(--line);
@@ -449,14 +449,12 @@ function fitNames() {
 function card(i) {
   const isSending = sending.has(i.key) || pending.has(i.key), problem = isSending ? "" : problemOf(i);
   const sent = isSent(i) && !problem, fresh = seenKnown && !isSent(i) && !problem && !isSending;
-  const el = h("li", { class: "item" + (sent ? " sent" : "") + (fresh ? " fresh" : "") + (problem ? " bad" : "") + (isSending ? " sending" : "") + (flashId === i.key ? " flash" : "") },
+  const el = h("li", { title: problem ? tidy(problem) : null, class: "item" + (sent ? " sent" : "") + (fresh ? " fresh" : "") + (problem ? " bad" : "") + (isSending ? " sending" : "") + (flashId === i.key ? " flash" : "") },
     h("div", { class: "mark", "aria-hidden": "true" }, isSending ? null : problem ? icon("alert", 16, 3) : sent ? icon("check", 14, 3.4) : null),
     h("div", { style: "min-width:0" },
       h("div", { class: "name", title: i.title }, h("span", { class: "t" }, i.title)),
       h("div", { class: "meta" }, h("span", {}, fmtDate(i.time)),
-        !problem && (seenKnown || isSending) ? h("span", { class: "state" }, isSending ? "Sending..." : sent ? "Sent" : "New") : null,
-        h("a", { class: "post", href: safeUrl(i.link), target: "_blank", rel: "noopener", "aria-label": "Open the website post", title: "Open the website post" }, icon("link", 14))),
-      problem ? h("div", { class: "reason" }, tidy(problem)) : null),
+        h("a", { class: "post", href: safeUrl(i.link), target: "_blank", rel: "noopener", "aria-label": "Open the website post", title: "Open the website post" }, icon("link", 14)))),
     h("button", { class: "send", disabled: busy || pending.has(i.key), "aria-label": problem ? "Try sending again" : sent ? "Send again to Telegram" : "Send to Telegram",
       title: problem ? "Try sending again" : sent ? "Send again to Telegram" : "Send to Telegram", onclick: () => sendItems([i], isSent(i)) }, icon("send", 20)));
   return el;
