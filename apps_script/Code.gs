@@ -10,6 +10,12 @@
  *     यह हर 10 मिनट में अपने-आप चलने वाला trigger बना देगा।
  *  4. एक बार  runNow  चलाकर Execution log देख लीजिए।
  *
+ * ध्यान: upscpdf.com (Cloudflare) Google के सर्वर को रोकता है, इसलिए runNow / trigger से
+ * पोस्ट पढ़ना नहीं चलेगा। असली तरीका: Mini App (फ़ोन) पोस्ट की सूची पढ़कर इस Web App (doPost)
+ * को भेजता है, और यह script Drive से फ़ाइलें लेकर Telegram पर भेजती है।
+ * Web App बनाना: Deploy -> New deployment -> Web app -> Execute as: Me,
+ *   Who has access: Anyone -> Deploy -> /exec वाला URL कॉपी कीजिए।
+ *
  * पुरानी सब फ़ाइलें चाहिए तो  sendEverything  चलाइए।
  * ध्यान: GitHub Actions वाला बॉट भी चालू रहा तो फ़ाइलें दो बार आएँगी - एक ही रखिए।
  */
@@ -177,4 +183,89 @@ function tgMessage_(token, chat, text) {
 
 function tgDocument_(token, chat, blob, caption) {
   tgCall_(token, 'sendDocument', { chat_id: chat, caption: caption.slice(0, 1024), document: blob });
+}
+
+
+// ------------------------------------------------- Mini App -> Web App
+
+function toHex_(bytes) {
+  return bytes.map(function (b) { return ('0' + (b & 0xff).toString(16)).slice(-2); }).join('');
+}
+
+/** Telegram Mini App initData की जाँच करता है; सही हो तो user object लौटाता है। */
+function verifyInitData_(initData, token) {
+  if (!initData) throw new Error('initData missing (open the Mini App from Telegram)');
+  var pairs = String(initData).split('&').map(function (kv) {
+    var i = kv.indexOf('=');
+    return [kv.slice(0, i), decodeURIComponent(kv.slice(i + 1).replace(/\+/g, ' '))];
+  });
+  var hash = '', fields = {};
+  pairs.forEach(function (p) { if (p[0] === 'hash') hash = p[1]; else fields[p[0]] = p[1]; });
+  var check = Object.keys(fields).sort().map(function (k) { return k + '=' + fields[k]; }).join('\n');
+  var secret = Utilities.computeHmacSha256Signature(token, 'WebAppData');
+  var sig = toHex_(Utilities.computeHmacSha256Signature(check, secret));
+  if (!hash || sig !== hash) throw new Error('bad initData signature');
+  if (Date.now() / 1000 - Number(fields.auth_date || 0) > 86400) throw new Error('initData expired; reopen the Mini App');
+  return JSON.parse(fields.user || '{}');
+}
+
+function cleanPosts_(list) {
+  var idRe = /^[A-Za-z0-9_-]{10,}$/;
+  var folderRe = /^https:\/\/drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\/[A-Za-z0-9_-]{10,}$/;
+  return (Array.isArray(list) ? list : []).slice(0, 60).map(function (p) {
+    return {
+      id: String(p.id || '').slice(0, 40),
+      title: String(p.title || '').slice(0, 300),
+      link: String(p.link || '').slice(0, 300),
+      time: Number(p.time) || 0,
+      files: (p.files || []).filter(function (f) { return idRe.test(f); }).slice(0, 10),
+      folders: (p.folders || []).filter(function (f) { return folderRe.test(f); }).slice(0, 5)
+    };
+  }).filter(function (p) { return p.id && p.title; });
+}
+
+function reply_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function doGet() { return reply_({ ok: true, info: 'UPSC bot web app is running' }); }
+
+function doPost(e) {
+  var lock = LockService.getScriptLock();
+  try {
+    var token = cfg_('TELEGRAM_BOT_TOKEN'), chat = cfg_('TELEGRAM_CHAT_ID');
+    if (!token || !chat) throw new Error('TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set');
+    var body = JSON.parse(e.postData.contents);
+    var user = verifyInitData_(body.initData, token);
+    if (String(chat).charAt(0) !== '-' && String(user.id) !== String(chat)) throw new Error('not allowed');
+
+    if (!lock.tryLock(5000)) throw new Error('another run is active');
+    var started = Date.now();
+    var props = PropertiesService.getScriptProperties();
+    var raw = props.getProperty('seen');
+    var seen = raw === null ? [] : JSON.parse(raw);
+    var posts = cleanPosts_(body.posts).sort(function (a, b) { return a.time - b.time; });
+    var todo = posts.filter(function (p) { return seen.indexOf(p.id) === -1; });
+    var sent = 0, failed = 0, left = 0;
+    for (var i = 0; i < todo.length; i++) {
+      if (Date.now() - started > RUN_BUDGET_MS) { left = todo.length - i; break; }
+      try {
+        deliver_(todo[i], token, chat);
+        seen.push(todo[i].id);
+        props.setProperty('seen', JSON.stringify(seen));
+        sent++;
+      } catch (err) {
+        failed++;
+        Logger.log('ERROR: ' + String(err.message).replace(token, '***'));
+      }
+    }
+    return reply_({ ok: true, total: posts.length, already: posts.length - todo.length,
+                    sent: sent, failed: failed, left: left });
+  } catch (err) {
+    var msg = String(err.message);
+    Logger.log('doPost error: ' + msg);
+    return reply_({ ok: false, error: msg.replace(cfg_('TELEGRAM_BOT_TOKEN', '@@'), '***') });
+  } finally {
+    try { lock.releaseLock(); } catch (x) {}
+  }
 }

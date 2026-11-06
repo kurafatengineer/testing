@@ -21,8 +21,9 @@
 <body>
 <h1>UPSC Prelims Test Series 2027</h1>
 <p><small>upscpdf.com की सबसे नई पोस्ट और उनकी Drive फ़ाइलें।</small></p>
-<button id="send">📥 मेरी फ़ाइलें Telegram पर भेजें</button>
-<p><small>दबाने पर GitHub खुलेगा। वहाँ <b>Run workflow</b> दबाइए। नई फ़ाइलें कुछ मिनट में आपके Telegram पर आ जाएँगी। पुरानी सब फ़ाइलें भी चाहिए तो <b>send_all</b> पर टिक कीजिए।</small></p>
+<button id="send">📥 आज की सारी नई फ़ाइलें Telegram पर भेजें</button>
+<p><small>दबाने पर जो फ़ाइलें अब तक आपको नहीं मिलीं, वे सब Telegram पर आ जाएँगी (कुछ मिनट लग सकते हैं, पेज खुला रखिए)।</small></p>
+<div id="status"></div>
 <button id="go" style="background:#555;margin-top:8px">सूची ताज़ा करें</button>
 <div id="out"></div>
 <script>
@@ -38,11 +39,40 @@ function note(msg, cls) { const d = card(); const s = document.createElement("sp
 function link(parent, href, label) { const a = document.createElement("a"); a.href = href; a.target = "_blank"; a.rel = "noopener"; a.textContent = label; parent.appendChild(a); }
 async function getJson(url) { const r = await fetch(url, { cache: "no-store" }); if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }
 
-document.getElementById("send").onclick = () => {
-  const u = "https://github.com/kurafatengineer/testing/actions/workflows/check.yml";
-  if (tg && tg.openLink) tg.openLink(u); else window.open(u, "_blank");
+// Apps Script Web App का /exec पता। खाली हो तो पहली बार पूछेगा और फ़ोन में याद रखेगा।
+const APPS_SCRIPT_URL = "";
+let LAST = [];
+const statusBox = document.getElementById("status");
+function setStatus(msg, cls) { statusBox.innerHTML = ""; const d = document.createElement("div"); d.className = "card" + (cls ? " " + cls : ""); d.textContent = msg; statusBox.appendChild(d); }
+function scriptUrl() {
+  let u = APPS_SCRIPT_URL;
+  try { u = u || localStorage.getItem("scriptUrl") || ""; } catch (e) {}
+  if (!u) {
+    u = (prompt("Apps Script Web App का /exec वाला पता paste कीजिए:") || "").trim();
+    if (u) { try { localStorage.setItem("scriptUrl", u); } catch (e) {} }
+  }
+  return u;
+}
+document.getElementById("send").onclick = async () => {
+  const url = scriptUrl();
+  if (!url) { setStatus("❌ Web App का पता चाहिए", "bad"); return; }
+  if (!tg || !tg.initData) { setStatus("❌ इसे Telegram के अंदर बॉट के मेन्यू से खोलिए", "bad"); return; }
+  if (!LAST.length) { setStatus("पोस्ट की सूची लोड हो रही है..."); await load(); }
+  if (!LAST.length) { setStatus("❌ भेजने के लिए कोई पोस्ट नहीं मिली", "bad"); return; }
+  setStatus("भेज रहा हूँ... " + LAST.length + " पोस्ट जाँच रहा हूँ, पेज खुला रखिए");
+  try {
+    const r = await fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ initData: tg.initData, posts: LAST }) });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || "अज्ञात गड़बड़ी");
+    setStatus("✅ " + j.sent + " पोस्ट भेजी गईं, " + j.already + " पहले ही आ चुकी थीं" +
+      (j.failed ? ", " + j.failed + " फेल (दोबारा दबाइए)" : "") +
+      (j.left ? ", " + j.left + " बाकी (फिर से दबाइए)" : ""), j.failed || j.left ? "bad" : "ok");
+  } catch (e) {
+    setStatus("❌ " + e.message + " (Telegram में फ़ाइलें आई हों तो देख लीजिए)", "bad");
+  }
 };
-document.getElementById("go").onclick = async () => {
+async function load() {
   out.innerHTML = "";
   note("लोड हो रहा है...");
   try {
@@ -53,6 +83,13 @@ document.getElementById("go").onclick = async () => {
     out.innerHTML = "";
     const wanted = posts.filter(p => text(p.title.rendered).includes(YEAR));
     if (!wanted.length) { note("2027 वाली कोई पोस्ट नहीं मिली"); return; }
+    LAST = wanted.map(p => {
+      const html = (p.content && p.content.rendered) || "";
+      return { id: String(p.id), title: text(p.title.rendered), link: p.link,
+               time: new Date(p.date_gmt + "Z").getTime(),
+               files: [...new Set([...html.matchAll(FILE_RE)].map(m => m[1]))],
+               folders: [...new Set(html.match(FOLDER_RE) || [])] };
+    });
     for (const p of wanted) {
       const html = (p.content && p.content.rendered) || "";
       const files = [...new Set([...html.matchAll(FILE_RE)].map(m => m[1]))];
@@ -68,8 +105,9 @@ document.getElementById("go").onclick = async () => {
       if (!files.length && !folders.length) { const s = document.createElement("small"); s.textContent = "पोस्ट में Drive लिंक नहीं मिला"; box.appendChild(s); }
     }
   } catch (e) { out.innerHTML = ""; note("❌ " + e.message, "bad"); }
-};
-document.getElementById("go").click();
+}
+document.getElementById("go").onclick = load;
+load();
 </script>
 </body>
 </html>
