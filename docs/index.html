@@ -182,7 +182,7 @@ const BUILTIN = [                                  // add more websites here
   { name: "UPSC PDF", url: "https://upscpdf.com" },
   { name: "Free UPSC", url: "https://freeupsc.org" }
 ];
-const PAGE = 50, BATCH = 8, MAX_SUGGEST = 6;
+const PAGE = 100, MAX_PAGES = 30, BATCH = 8, MAX_SUGGEST = 6;   // 100 = most a WordPress site returns per request
 const FILE_RE = /drive\.google\.com\/file\/d\/([A-Za-z0-9_-]{10,})/g;
 const FOLDER_RE = /https?:\/\/drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\/[A-Za-z0-9_-]{10,}/g;
 
@@ -266,14 +266,17 @@ async function fetchPosts(s, search, page) {
     time: p.date_gmt ? Date.parse(p.date_gmt + "Z") : 0 })).filter(i => i.title.includes(YEAR)) };
 }
 
-async function loadMore() {
+async function loadMore() {                      // loads EVERY page, one after another; shows files as they arrive
   const s = site(), st = stateOf(s);
   if (st.loading || st.done) return;
   st.loading = true; st.error = ""; render();
   try {
-    const r = await fetchPosts(s, YEAR, st.page + 1);
-    st.page++; r.items.forEach(i => st.items.set(i.id, Object.assign(st.items.get(i.id) || {}, i)));
-    if (r.raw < PAGE) st.done = true;
+    while (!st.done) {
+      const r = await fetchPosts(s, YEAR, st.page + 1);
+      st.page++; r.items.forEach(i => st.items.set(i.id, Object.assign(st.items.get(i.id) || {}, i)));
+      if (r.raw < PAGE || st.page >= MAX_PAGES) st.done = true;
+      render();
+    }
   } catch (e) { st.error = "Could not load the list (" + e.message + ")"; }
   st.loading = false; render();
 }
@@ -439,7 +442,6 @@ function render() {
   if (st.error) foot.append(h("div", { class: "error" }, st.error, h("br"), h("button", { class: "linkbtn", onclick: loadMore }, "Try again")));
   else if (!st.loading && !list.length) foot.append(h("div", { class: "empty" }, query ? "No files match your search." : "No files found."));
   if (query.trim() && !st.loading && !list.length) foot.append(h("button", { class: "more", onclick: serverSearch }, "Search “" + query.trim() + "” on the website"));
-  if (!st.done && !st.loading && !st.error && st.items.size && !query) foot.append(h("button", { class: "more", onclick: loadMore }, "Show older files"));
   if (st.loading && st.items.size) foot.append(h("div", { class: "empty" }, "Loading..."));
   if (cur >= BUILTIN.length) foot.append(h("button", { class: "linkbtn", style: "display:block;margin:16px auto 0", onclick: removeSite }, "Remove this website"));
 
