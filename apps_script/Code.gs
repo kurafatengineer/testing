@@ -189,7 +189,7 @@ function deliver_(post, token, chat) {
     });
     tgMessage_(token, chat, header_(post) +
       '\n\n⚠️ These files could not be sent automatically. Please download them yourself:\n' + lines.join('\n'));
-    return info.manual.length + ' file(s) not sent: ' + info.manual[0].why;
+    return info.manual.length + (info.manual.length === 1 ? ' file' : ' files') + ' not sent: ' + info.manual[0].why;
   }
   return '';
 }

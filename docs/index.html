@@ -234,6 +234,7 @@ const api = s => s.url.replace(/\/$/, "") + "/wp-json/wp/v2";
 const keyOf = (s, id) => host(s) === "upscpdf.com" ? String(id) : host(s) + ":" + id;
 const stateOf = s => { if (!data.has(s.url)) data.set(s.url, { items: new Map(), page: 0, done: false, loading: false, error: "" }); return data.get(s.url); };
 const isSent = i => seenKnown && seen.has(i.key);
+const tidy = t => t.replace(/\b1 file\(s\)/, "1 file").replace(/\b(\d+) file\(s\)/, "$1 files");
 const problemOf = i => issues[i.key] || (failedNow.has(i.key) ? "Sending failed - tap the red button to retry" : "");
 
 /* ------------------------------ loading posts ------------------------------ */
@@ -374,9 +375,9 @@ function card(i) {
     h("div", { style: "min-width:0" },
       h("div", { class: "name", title: i.title }, h("span", { class: "t" }, i.title)),
       h("div", { class: "meta" }, h("span", {}, fmtDate(i.time)),
-        seenKnown || problem ? h("span", { class: "state" }, isSending ? "Sending..." : problem ? (issues[i.key] ? "Problem" : "Failed") : sent ? "Sent" : "New") : null,
+        !problem && (seenKnown || isSending) ? h("span", { class: "state" }, isSending ? "Sending..." : sent ? "Sent" : "New") : null,
         h("a", { class: "post", href: safeUrl(i.link), target: "_blank", rel: "noopener", "aria-label": "Open the website post", title: "Open the website post" }, icon("link", 14))),
-      problem ? h("div", { class: "reason" }, problem) : null),
+      problem ? h("div", { class: "reason" }, tidy(problem)) : null),
     h("button", { class: "send", disabled: busy, "aria-label": problem ? "Try sending again" : sent ? "Send again to Telegram" : "Send to Telegram",
       title: problem ? "Try sending again" : sent ? "Send again to Telegram" : "Send to Telegram", onclick: () => sendItems([i], isSent(i)) }, icon("send", 20)));
   return el;
