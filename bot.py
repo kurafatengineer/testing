@@ -123,7 +123,7 @@ def fetch_feed() -> bytes:
                 data = resp.read()
                 encoding = (resp.headers.get("Content-Encoding") or "").lower()
         except urllib.error.HTTPError as exc:
-            body = exc.read()[:400]
+            body = exc.read()
             if (exc.headers.get("Content-Encoding") or "").lower() == "gzip":
                 try:
                     body = gzip.decompress(body)
@@ -187,6 +187,67 @@ def parse_feed(data: bytes) -> list[Post]:
             folders=folders,
         ))
     return posts
+
+
+def http_get(url: str, accept: str) -> bytes:
+    headers = dict(BROWSER_HEADERS, Accept=accept)
+    req = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
+        data = resp.read()
+        if (resp.headers.get("Content-Encoding") or "").lower() == "gzip":
+            data = gzip.decompress(data)
+    return data
+
+
+def strip_tags(text: str) -> str:
+    return html.unescape(re.sub(r"<[^>]+>", "", text or "")).strip()
+
+
+def fetch_posts_from_api() -> list[Post]:
+    """Read posts through the WordPress REST API (fallback when the feed is blocked)."""
+    site = FEED_URL.split("/feed", 1)[0].rstrip("/")
+    api = f"{site}/wp-json/wp/v2"
+    q = urllib.parse.quote(CATEGORY)
+    log(f"Fetching category id from {api}/categories?search={q}")
+    cats = json.loads(http_get(f"{api}/categories?search={q}&per_page=100",
+                               "application/json"))
+    cat_ids = [c["id"] for c in cats
+               if strip_tags(c.get("name", "")).lower() == CATEGORY.lower()]
+    if not cat_ids:
+        raise OSError(f"category {CATEGORY!r} not found via API")
+    url = (f"{api}/posts?categories={cat_ids[0]}&per_page=30"
+           "&_fields=id,date_gmt,link,guid,title,content")
+    log(f"Fetching posts {url}")
+    items = json.loads(http_get(url, "application/json"))
+    posts = []
+    for i, it in enumerate(items):
+        file_ids, folders = extract_drive_links((it.get("content") or {}).get("rendered", ""))
+        published = None
+        if it.get("date_gmt"):
+            published = datetime.fromisoformat(it["date_gmt"]).replace(tzinfo=timezone.utc)
+        link = it.get("link", "")
+        posts.append(Post(
+            guid=html.unescape((it.get("guid") or {}).get("rendered") or link),
+            title=strip_tags((it.get("title") or {}).get("rendered", "")),
+            link=link,
+            categories=[CATEGORY],
+            published=published,
+            order=i,
+            file_ids=file_ids,
+            folders=folders,
+        ))
+    log(f"API returned {len(posts)} post(s)")
+    return posts
+
+
+def get_posts() -> list[Post]:
+    try:
+        return parse_feed(fetch_feed())
+    except (urllib.error.URLError, TimeoutError, OSError, ET.ParseError) as exc:
+        if os.environ.get("FEED_FILE", "").strip():
+            raise
+        log(f"Feed failed ({exc}); trying the WordPress API instead")
+    return fetch_posts_from_api()
 
 
 def matches(post: Post) -> bool:
@@ -426,8 +487,9 @@ def main() -> int:
         f"category={CATEGORY!r} dry_run={args.dry_run}")
 
     try:
-        posts = parse_feed(fetch_feed())
-    except (urllib.error.URLError, TimeoutError, OSError, ET.ParseError) as exc:
+        posts = get_posts()
+    except (urllib.error.URLError, TimeoutError, OSError, ET.ParseError,
+            ValueError, KeyError) as exc:
         log(f"ERROR: could not read the feed: {exc}")
         return 1
     log(f"Feed items: {len(posts)}")
