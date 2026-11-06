@@ -141,7 +141,10 @@ if (tg) { tg.ready(); try { tg.expand(); } catch (e) {} }
 /* ------------------------------ सेटिंग ------------------------------ */
 const YEAR = "2027";
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyRP4WC23dmnYcUwD16HnSe3eUPwDytA9MhKl0SgccbeVLqpZV-dS6gcL8JW8L5cBaS/exec";
-const BUILTIN = [{ name: "UPSC PDF", url: "https://upscpdf.com" }];   // और वेबसाइट यहाँ जोड़ी जा सकती हैं
+const BUILTIN = [                                  // और वेबसाइट यहाँ जोड़ी जा सकती हैं
+  { name: "UPSC PDF", url: "https://upscpdf.com" },
+  { name: "Free UPSC", url: "https://freeupsc.org" }
+];
 const PAGE = 50, BATCH = 8;
 const FILE_RE = /drive\.google\.com\/file\/d\/([A-Za-z0-9_-]{10,})/g;
 const FOLDER_RE = /https?:\/\/drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\/[A-Za-z0-9_-]{10,}/g;
