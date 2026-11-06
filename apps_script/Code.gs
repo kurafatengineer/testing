@@ -16,7 +16,7 @@
  * Web App बनाना: Deploy -> New deployment -> Web app -> Execute as: Me,
  *   Who has access: Anyone -> Deploy -> /exec वाला URL कॉपी कीजिए।
  *
- * पुरानी सब फ़ाइलें चाहिए तो  sendEverything  चलाइए।
+ * सब कुछ फिर से भेजना हो तो  resetSeen  चलाइए, फिर Mini App में बटन दबाइए।
  * ध्यान: GitHub Actions वाला बॉट भी चालू रहा तो फ़ाइलें दो बार आएँगी - एक ही रखिए।
  */
 
@@ -37,6 +37,12 @@ function setupTrigger() {
   });
   ScriptApp.newTrigger('runNow').timeBased().everyMinutes(10).create();
   Logger.log('Trigger set: runNow every 10 minutes');
+}
+
+/** "भेजी हुई" सूची मिटाता है। इसके बाद Mini App का बटन दबाने पर सारी पोस्ट फिर से आएँगी। */
+function resetSeen() {
+  PropertiesService.getScriptProperties().deleteProperty('seen');
+  Logger.log('seen list cleared');
 }
 
 function sendEverything() {
@@ -134,34 +140,118 @@ function fetchPosts_() {
 
 // ------------------------------------------------------------ delivery
 
-function deliver_(post, token, chat) {
-  var caption = post.title + '\n' + post.link;
-  if (!post.files.length && !post.folders.length) {
-    tgMessage_(token, chat, caption + '\n\n(No Google Drive link found in the post)');
-    return;
+var MAX_FILES_PER_FOLDER = 10;           // एक फ़ोल्डर से इतनी PDF तक भेजेंगे
+var MAX_GROUP_FILES = 10;                // Telegram album में अधिकतम 10
+var MAX_GROUP_BYTES = 40 * 1024 * 1024;  // एक album का कुल आकार (UrlFetch की सीमा से नीचे)
+
+function esc_(t) {
+  return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function a_(url, label) {
+  return '<a href="' + String(url).replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '">' + esc_(label) + '</a>';
+}
+function viewUrl_(id) { return 'https://drive.google.com/file/d/' + id + '/view'; }
+
+/** टाइटल किस लिंक पर जाए: Drive फ़ोल्डर, नहीं तो अकेली फ़ाइल, नहीं तो वेबसाइट पोस्ट। */
+function mainLink_(post) {
+  if (post.folders.length) return post.folders[0];
+  if (post.files.length === 1) return viewUrl_(post.files[0]);
+  return post.link;
+}
+
+function header_(post, extra) {
+  return a_(mainLink_(post), post.title) + (extra ? ' ' + esc_(extra) : '') +
+         '\n🌐 ' + a_(post.link, 'वेबसाइट पोस्ट');
+}
+
+/** पोस्ट की सारी PDF खोजता है: ok = भेजने लायक, manual = खुद डाउनलोड करनी होंगी। */
+function listFiles_(post) {
+  var ok = [], manual = [], seen = {};
+  function add(id, name, size, url) {
+    if (seen[id]) return;
+    seen[id] = true;
+    if (size > MAX_BYTES) {
+      manual.push({ name: name, url: url, why: 'बहुत बड़ी फ़ाइल (' + Math.round(size / 1048576) + ' MB)' });
+    } else {
+      ok.push({ id: id, name: name, size: size });
+    }
   }
   post.files.forEach(function (id, n) {
-    var part = post.files.length > 1 ? ' (' + (n + 1) + '/' + post.files.length + ')' : '';
-    var blob = null;
     try {
-      var file = DriveApp.getFileById(id);
-      if (file.getSize() <= MAX_BYTES) blob = file.getBlob();
-      else Logger.log('  ' + id + ': too large (' + file.getSize() + ' bytes)');
+      var f = DriveApp.getFileById(id);
+      add(id, f.getName(), f.getSize(), viewUrl_(id));
     } catch (e) {
-      Logger.log('  ' + id + ': Drive read failed: ' + e.message);
-    }
-    if (blob) {
-      var name = blob.getName() || (post.title + '.pdf');
-      if (!/\.pdf$/i.test(name)) name += '.pdf';
-      tgDocument_(token, chat, blob.setName(name), post.title + part + '\n' + post.link);
-    } else {
-      tgMessage_(token, chat, post.title + part + '\n' + post.link +
-        '\n\nPDF (download it from Drive): https://drive.google.com/file/d/' + id + '/view');
+      seen[id] = true;
+      manual.push({ name: 'फ़ाइल ' + (n + 1), url: viewUrl_(id), why: 'Drive से अपने-आप नहीं खुली' });
     }
   });
-  post.folders.forEach(function (f) {
-    tgMessage_(token, chat, caption + '\n\nDrive folder: ' + f);
+  post.folders.forEach(function (url) {
+    var fid = (url.match(/folders\/([A-Za-z0-9_-]+)/) || [])[1];
+    try {
+      var it = DriveApp.getFolderById(fid).getFilesByType(MimeType.PDF);
+      var count = 0, more = 0;
+      while (it.hasNext()) {
+        var f = it.next();
+        if (count >= MAX_FILES_PER_FOLDER) { more++; continue; }
+        count++;
+        add(f.getId(), f.getName(), f.getSize(), f.getUrl());
+      }
+      if (more) manual.push({ name: 'फ़ोल्डर की ' + more + ' और फ़ाइलें', url: url, why: 'फ़ोल्डर खोलकर देखिए' });
+    } catch (e) {
+      manual.push({ name: 'Drive फ़ोल्डर', url: url, why: 'अपने-आप नहीं खुला' });
+    }
   });
+  ok.sort(function (x, y) { return x.name < y.name ? -1 : x.name > y.name ? 1 : 0; });
+  return { ok: ok, manual: manual };
+}
+
+function chunk_(list) {
+  var out = [], cur = [], bytes = 0;
+  list.forEach(function (f) {
+    if (cur.length && (cur.length >= MAX_GROUP_FILES || bytes + f.size > MAX_GROUP_BYTES)) {
+      out.push(cur); cur = []; bytes = 0;
+    }
+    cur.push(f); bytes += f.size;
+  });
+  if (cur.length) out.push(cur);
+  return out;
+}
+
+function pdfName_(name) { return /\.pdf$/i.test(name) ? name : name + '.pdf'; }
+
+function groupCaption_(post, files, extra) {
+  var cap = header_(post, extra) + '\n';
+  for (var i = 0; i < files.length; i++) {
+    var line = '\n📄 ' + esc_(files[i].name.length > 70 ? files[i].name.slice(0, 67) + '...' : files[i].name);
+    if ((cap + line).length > 950) { cap += '\n...'; break; }
+    cap += line;
+  }
+  return cap;
+}
+
+function deliver_(post, token, chat) {
+  var info = listFiles_(post);
+  if (!info.ok.length && !info.manual.length) {
+    tgMessage_(token, chat, header_(post) + '\n\n(पोस्ट में Google Drive का लिंक नहीं मिला)');
+    return;
+  }
+  var groups = chunk_(info.ok);
+  groups.forEach(function (g, i) {
+    var extra = groups.length > 1 ? '(भाग ' + (i + 1) + '/' + groups.length + ')' : '';
+    var caption = groupCaption_(post, g, extra);
+    var blobs = g.map(function (f) {
+      return DriveApp.getFileById(f.id).getBlob().setName(pdfName_(f.name));
+    });
+    if (blobs.length === 1) tgDocument_(token, chat, blobs[0], caption);
+    else tgMediaGroup_(token, chat, blobs, caption);
+  });
+  if (info.manual.length) {
+    var lines = info.manual.slice(0, 25).map(function (m) {
+      return '• ' + a_(m.url, m.name) + ' — ' + esc_(m.why);
+    });
+    tgMessage_(token, chat, header_(post) +
+      '\n\n⚠️ ये फ़ाइलें अपने-आप नहीं भेजी जा सकीं, आपको खुद डाउनलोड करनी होंगी:\n' + lines.join('\n'));
+  }
 }
 
 function tgCall_(token, method, payload) {
@@ -177,14 +267,25 @@ function tgCall_(token, method, payload) {
   return body;
 }
 
-function tgMessage_(token, chat, text) {
-  tgCall_(token, 'sendMessage', { chat_id: chat, text: text.slice(0, 4096), disable_web_page_preview: 'true' });
+function tgMessage_(token, chat, html) {
+  tgCall_(token, 'sendMessage', { chat_id: chat, text: html.slice(0, 4096), parse_mode: 'HTML',
+                                  disable_web_page_preview: 'true' });
 }
 
-function tgDocument_(token, chat, blob, caption) {
-  tgCall_(token, 'sendDocument', { chat_id: chat, caption: caption.slice(0, 1024), document: blob });
+function tgDocument_(token, chat, blob, html) {
+  tgCall_(token, 'sendDocument', { chat_id: chat, caption: html.slice(0, 1024), parse_mode: 'HTML', document: blob });
 }
 
+function tgMediaGroup_(token, chat, blobs, html) {
+  var payload = { chat_id: chat };
+  payload.media = JSON.stringify(blobs.map(function (b, i) {
+    var item = { type: 'document', media: 'attach://f' + i };
+    if (i === 0) { item.caption = html.slice(0, 1024); item.parse_mode = 'HTML'; }
+    return item;
+  }));
+  blobs.forEach(function (b, i) { payload['f' + i] = b; });
+  tgCall_(token, 'sendMediaGroup', payload);
+}
 
 // ------------------------------------------------- Mini App -> Web App
 
