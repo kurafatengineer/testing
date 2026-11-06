@@ -53,7 +53,6 @@ Everything runs for free: the app is a static page on **GitHub Pages**, and the 
 |---|---|
 | `docs/index.html` | The Mini App (single file: HTML + CSS + JS). Published with GitHub Pages. |
 | `apps_script/Code.gs` | The backend. Copy-paste into a Google Apps Script project. |
-| `bot.py`, `.github/workflows/check.yml`, `tests/` | First-generation approach (a GitHub Actions bot that read the RSS feed). Kept for reference only – anti-bot protection blocks it, so it isn't used. Safe to delete or disable. |
 
 ---
 
