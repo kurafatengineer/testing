@@ -21,6 +21,8 @@
 
 var MAX_BYTES = 50 * 1024 * 1024;        // Telegram bot upload limit
 var RUN_BUDGET_MS = 5 * 60 * 1000;       // Apps Script की 6 मिनट की सीमा से पहले रुक जाओ
+var INLINE_BUDGET_MS = 15 * 1000;        // Mini App की request में इतनी देर भेजकर बाकी पीछे (background) चलता है
+var QUEUE_MAX = 400;                     // कतार में एक साथ इतनी पोस्ट तक
 
 function cfg_(key, fallback) {
   var v = PropertiesService.getScriptProperties().getProperty(key);
@@ -73,7 +75,9 @@ function resetSeen() {
   props.deleteProperty('seen_n');
   props.deleteProperty('seen');
   props.deleteProperty('issues');
-  Logger.log('seen list cleared');
+  queueEntries_().forEach(function (q) { props.deleteProperty(q.key); });
+  removeRunTriggers_();
+  Logger.log('seen list, problems and waiting queue cleared');
 }
 
 // ------------------------------------------------------------ delivery
@@ -155,16 +159,24 @@ function chunk_(list) {
   return out;
 }
 
-function pdfName_(name) { return /\.pdf$/i.test(name) ? name : name + '.pdf'; }
+/** "Test_08_Solution .pdf" -> "Test 08 Solution" (no underscores, no extension, no double spaces) */
+function cleanName_(name) {
+  return String(name).replace(/\.pdf\s*$/i, '').replace(/_/g, ' ').replace(/\s+/g, ' ').trim() || 'Document';
+}
+function pdfName_(name) { return cleanName_(name) + '.pdf'; }
 
+/** Caption order: the list of files first, then the post title as a link (+ website post link). */
 function groupCaption_(post, files, extra) {
-  var cap = header_(post, extra) + '\n';
+  var head = header_(post, extra);
+  if (files.length < 2) return head;
+  var list = '', room = 1000 - head.length - 4;
   for (var i = 0; i < files.length; i++) {
-    var line = '\n📄 ' + esc_(files[i].name.length > 70 ? files[i].name.slice(0, 67) + '...' : files[i].name);
-    if ((cap + line).length > 950) { cap += '\n...'; break; }
-    cap += line;
+    var n = cleanName_(files[i].name);
+    var line = '📄 ' + esc_(n.length > 70 ? n.slice(0, 67) + '...' : n) + '\n';
+    if (list.length + line.length > room) { list += '...\n'; break; }
+    list += line;
   }
-  return cap;
+  return list + '\n' + head;
 }
 
 function deliver_(post, token, chat) {
@@ -220,7 +232,7 @@ function tgMediaGroup_(token, chat, blobs, html) {
   var payload = { chat_id: chat };
   payload.media = JSON.stringify(blobs.map(function (b, i) {
     var item = { type: 'document', media: 'attach://f' + i };
-    if (i === 0) { item.caption = html.slice(0, 1024); item.parse_mode = 'HTML'; }
+    if (i === blobs.length - 1) { item.caption = html.slice(0, 1024); item.parse_mode = 'HTML'; }   // shows under the last file, i.e. below all files
     return item;
   }));
   blobs.forEach(function (b, i) { payload['f' + i] = b; });
@@ -271,15 +283,101 @@ function reply_(obj) {
 
 function doGet() { return reply_({ ok: true, info: 'UPSC bot web app is running' }); }
 
+// ------------------------------------------------------------- कतार (queue)
+// हर पोस्ट एक अलग property ('q:'+hash) में रहती है। Mini App पोस्ट कतार में डालकर छुट्टी पा लेता है;
+// भेजने का काम यहीं पीछे चलता रहता है, चाहे पेज बंद हो जाए।
+
+function queueKey_(id) {
+  return 'q:' + toHex_(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, String(id), Utilities.Charset.UTF_8));
+}
+
+function queueEntries_() {
+  var props = PropertiesService.getScriptProperties(), all = props.getProperties(), out = [];
+  Object.keys(all).forEach(function (k) {
+    if (k.indexOf('q:') !== 0) return;
+    try { out.push({ key: k, post: JSON.parse(all[k]) }); } catch (e) { props.deleteProperty(k); }
+  });
+  out.sort(function (a, b) { return a.post.time - b.post.time; });   // पुरानी पोस्ट पहले
+  return out;
+}
+
+function removeRunTriggers_() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'processQueue') ScriptApp.deleteTrigger(t);
+  });
+}
+
+function scheduleRun_(ms) {
+  try {
+    removeRunTriggers_();
+    ScriptApp.newTrigger('processQueue').timeBased().after(ms).create();
+    return true;
+  } catch (e) {
+    Logger.log('Could not schedule the background run (run any function once in the editor and Allow the permissions): ' + e.message);
+    return false;
+  }
+}
+
+/** Trigger का entry point: कतार की बची पोस्ट भेजता है, और बची रहें तो अपने-आप फिर चलता है। */
+function processQueue() {
+  removeRunTriggers_();
+  var left = processQueue_(RUN_BUDGET_MS);
+  if (left !== 0) scheduleRun_(left < 0 ? 60000 : 2000);
+}
+
+/** कतार से पोस्ट भेजता है। लौटाता है: बची हुई पोस्ट की गिनती (-1 = कोई और अभी भेज रहा है)। */
+function processQueue_(budgetMs) {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(2000)) return -1;
+  try {
+    var token = cfg_('TELEGRAM_BOT_TOKEN'), chat = cfg_('TELEGRAM_CHAT_ID');
+    var props = PropertiesService.getScriptProperties();
+    var started = Date.now();
+    var seen = loadSeen_(), issues = loadIssues_();
+    var entries = queueEntries_();
+    for (var i = 0; i < entries.length; i++) {
+      if (Date.now() - started > budgetMs) break;
+      var key = entries[i].key, p = entries[i].post;
+      if (!p.force && seen.indexOf(p.id) !== -1) { props.deleteProperty(key); continue; }
+      try {
+        var problem = deliver_(p, token, chat);
+        if (seen.indexOf(p.id) === -1) seen.push(p.id);
+        saveSeen_(seen);
+        if (problem) issues[p.id] = String(problem).slice(0, 60); else delete issues[p.id];
+        saveIssues_(issues);
+        props.deleteProperty(key);
+      } catch (err) {
+        var msg = String(err.message).replace(token, '***');
+        Logger.log('ERROR: ' + msg);
+        p.tries = (p.tries || 0) + 1;
+        if (p.tries >= 2) {                                   // दो बार फेल: छोड़ दो और Mini App में लाल दिखाओ
+          issues[p.id] = ('Sending failed: ' + msg).slice(0, 60);
+          saveIssues_(issues);
+          props.deleteProperty(key);
+        } else {
+          props.setProperty(key, JSON.stringify(p));
+        }
+      }
+    }
+    return queueEntries_().length;
+  } finally {
+    try { lock.releaseLock(); } catch (x) {}
+  }
+}
+
+function statusReply_() {
+  return { ok: true, seen: loadSeen_(), issues: loadIssues_(),
+           pendingIds: queueEntries_().map(function (q) { return q.post.id; }) };
+}
+
 /**
- * body = { initData, action: 'status' | 'send', posts: [...], force: bool }
- *  status -> { ok, seen: [ids], issues: { id: reason } }
- *  send   -> { ok, total, already, sent, failed, left, done: [ids], failedIds: [ids] }
- *            force=true: "seen" को अनदेखा करके फिर से भेजता है (फ़ाइल दोबारा चाहिए तब)।
+ * body = { initData, action: 'status' | 'send', posts: [...], force: bool, start: bool }
+ *  status -> { ok, seen: [ids], issues: { id: reason }, pendingIds: [ids] }
+ *  send   -> posts को कतार में डालता है ( force=true: "भेजी हुई" को अनदेखा करके फिर से भेजना )।
+ *            start=false सिर्फ़ कतार में डालता है; आख़िरी टुकड़े (start != false) पर भेजना शुरू होता है।
+ *            जवाब = status जैसा + { queued, already }। बाकी काम पीछे चलता रहता है।
  */
 function doPost(e) {
-  var lock = LockService.getScriptLock();
-  var locked = false;
   try {
     var token = cfg_('TELEGRAM_BOT_TOKEN'), chat = cfg_('TELEGRAM_CHAT_ID');
     if (!token || !chat) throw new Error('TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set');
@@ -287,39 +385,32 @@ function doPost(e) {
     var user = verifyInitData_(body.initData, token);
     if (String(chat).charAt(0) !== '-' && String(user.id) !== String(chat)) throw new Error('not allowed');
 
-    if (body.action === 'status') return reply_({ ok: true, seen: loadSeen_(), issues: loadIssues_() });
+    if (body.action === 'status') return reply_(statusReply_());
 
-    if (!lock.tryLock(5000)) throw new Error('Another send is in progress. Please try again in a moment.');
-    locked = true;
-    var started = Date.now();
-    var seen = loadSeen_();
-    var issues = loadIssues_();
+    var props = PropertiesService.getScriptProperties();
     var force = body.force === true;
-    var posts = cleanPosts_(body.posts).sort(function (a, b) { return a.time - b.time; });
-    var todo = posts.filter(function (p) { return force || seen.indexOf(p.id) === -1; });
-    var done = [], failedIds = [], left = 0;
-    for (var i = 0; i < todo.length; i++) {
-      if (Date.now() - started > RUN_BUDGET_MS) { left = todo.length - i; break; }
-      try {
-        var problem = deliver_(todo[i], token, chat);
-        if (seen.indexOf(todo[i].id) === -1) seen.push(todo[i].id);
-        saveSeen_(seen);
-        if (problem) issues[todo[i].id] = String(problem).slice(0, 60); else delete issues[todo[i].id];
-        saveIssues_(issues);
-        done.push(todo[i].id);
-      } catch (err) {
-        failedIds.push(todo[i].id);
-        Logger.log('ERROR: ' + String(err.message).replace(token, '***'));
-      }
+    var seen = loadSeen_();
+    var waiting = queueEntries_().length;
+    var toAdd = {}, added = 0, already = 0;
+    cleanPosts_(body.posts).forEach(function (p) {
+      if (!force && seen.indexOf(p.id) !== -1) { already++; return; }
+      p.force = force; p.tries = 0;
+      toAdd[queueKey_(p.id)] = JSON.stringify(p);
+      added++;
+    });
+    if (waiting + added > QUEUE_MAX) throw new Error('Too many files are already waiting. Please try again in a few minutes.');
+    if (added) props.setProperties(toAdd);
+
+    if (body.start !== false && (added || waiting)) {
+      scheduleRun_(60000);                                   // safety net: keeps going even if this request is cut off
+      var left = processQueue_(INLINE_BUDGET_MS);            // first files go out right away
+      if (left !== 0) scheduleRun_(1000); else removeRunTriggers_();
     }
-    return reply_({ ok: true, total: posts.length, already: posts.length - todo.length,
-                    sent: done.length, failed: failedIds.length, left: left,
-                    done: done, failedIds: failedIds, issues: issues });
+    var r = statusReply_(); r.queued = added; r.already = already;
+    return reply_(r);
   } catch (err) {
     var msg = String(err.message);
     Logger.log('doPost error: ' + msg);
     return reply_({ ok: false, error: msg.replace(cfg_('TELEGRAM_BOT_TOKEN', '@@'), '***') });
-  } finally {
-    if (locked) { try { lock.releaseLock(); } catch (x) {} }
   }
 }

@@ -182,7 +182,7 @@ const BUILTIN = [                                  // add more websites here
   { name: "UPSC PDF", url: "https://upscpdf.com" },
   { name: "Free UPSC", url: "https://freeupsc.org" }
 ];
-const PAGE = 100, MAX_PAGES = 30, BATCH = 8, MAX_SUGGEST = 6;   // 100 = most a WordPress site returns per request
+const PAGE = 100, MAX_PAGES = 30, BATCH = 40, MAX_SUGGEST = 6, POLL_MS = 6000;   // 100 = most a WordPress site returns per request
 const FILE_RE = /drive\.google\.com\/file\/d\/([A-Za-z0-9_-]{10,})/g;
 const FOLDER_RE = /https?:\/\/drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\/[A-Za-z0-9_-]{10,}/g;
 
@@ -240,7 +240,8 @@ const allSites = () => BUILTIN.concat(customSites);
 let cur = Math.min(Math.max(store.get("cur", 0), 0), allSites().length - 1);
 const data = new Map();            // site url -> {items: Map, page, done, loading, error}
 let seen = new Set(), seenKnown = false;
-let issues = {};                   // post key -> why its PDF could not be sent (kept by the Apps Script)
+let issues = {};
+let pending = new Set();           // posts waiting in the Apps Script queue (sent in the background)                   // post key -> why its PDF could not be sent (kept by the Apps Script)
 const failedNow = new Set();       // posts that failed to send in this session
 let query = "", suggestOpen = false, flashId = null;
 const sending = new Set();
@@ -316,35 +317,48 @@ async function callScript(body) {
   return j;
 }
 
-async function refreshStatus() {
-  try { const j = await callScript({ action: "status" }); seen = new Set(j.seen); issues = j.issues || {}; seenKnown = true; }
-  catch (e) { seenKnown = false; if (tg && tg.initData) toast("Could not load the sent status: " + e.message); }
-  render();
+function applyStatus(j) {
+  seen = new Set(j.seen || []); issues = j.issues || {}; pending = new Set(j.pendingIds || []); seenKnown = true;
 }
 
+async function refreshStatus() {
+  try { applyStatus(await callScript({ action: "status" })); }
+  catch (e) { seenKnown = false; if (tg && tg.initData) toast("Could not load the sent status: " + e.message); }
+  render(); startPolling();
+}
+
+// While files are still being sent in the background, keep the page up to date (only if it is open).
+let pollTimer = null;
+function startPolling() {
+  if (pollTimer || !pending.size) return;
+  pollTimer = setInterval(async () => {
+    if (document.hidden) return;
+    try { applyStatus(await callScript({ action: "status" })); } catch (e) { return; }
+    render();
+    if (!pending.size) { clearInterval(pollTimer); pollTimer = null; toast("All files have been sent to Telegram"); }
+  }, POLL_MS);
+}
+
+// Puts the posts in the Apps Script queue and returns. The sending itself continues on Google's side,
+// so this page can be closed right after.
 async function sendItems(items, force) {
-  if (busy) { toast("Please wait for the current send to finish"); return; }
+  if (busy) { toast("Please wait a moment"); return; }
   if (!items.length) return;
   busy = true; const s = site(); items.forEach(i => sending.add(i.key)); render();
-  let sent = 0, failed = 0;
+  let queued = 0;
   try {
+    toast("Preparing " + items.length + " post" + (items.length > 1 ? "s" : "") + "...", 0);
     for (let k = 0; k < items.length; k += BATCH) {
-      const part = items.slice(k, k + BATCH);
-      toast("Sending " + Math.min(k + BATCH, items.length) + " of " + items.length + "... keep this page open", 0);
+      const part = items.slice(k, k + BATCH), last = k + BATCH >= items.length;
       await ensureContent(s, part);
-      const j = await callScript({ action: "send", force: !!force, posts: part.map(i => ({
+      const j = await callScript({ action: "send", force: !!force, start: last, posts: part.map(i => ({
         id: i.key, title: i.title, link: i.link, time: i.time, files: i.files, folders: i.folders })) });
-      j.done.forEach(id => { seen.add(id); failedNow.delete(id); }); (j.failedIds || []).forEach(id => failedNow.add(id));
-      if (j.issues) issues = j.issues;
-      sent += j.sent; failed += j.failed;
-      part.forEach(i => sending.delete(i.key));
-      if (j.left) { failed += j.left; break; }
-      render();
+      queued += j.queued; applyStatus(j);
     }
-    toast(sent ? "Sent " + sent + " post" + (sent > 1 ? "s" : "") + " to Telegram" + (failed ? " - " + failed + " left, tap again" : "")
-               : failed ? "Nothing could be sent, please try again" : "Nothing new to send");
+    toast(queued ? "Queued " + queued + " post" + (queued > 1 ? "s" : "") + ". You can close this page - the files will keep arriving in Telegram."
+                 : "Nothing new to send", queued ? 8000 : 4500);
   } catch (e) { toast(e.message, 8000); }
-  items.forEach(i => sending.delete(i.key)); busy = false; render();
+  items.forEach(i => sending.delete(i.key)); busy = false; render(); startPolling();
 }
 
 /* ------------------------------ rendering ------------------------------ */
@@ -404,7 +418,7 @@ function fitNames() {
 }
 
 function card(i) {
-  const isSending = sending.has(i.key), problem = isSending ? "" : problemOf(i);
+  const isSending = sending.has(i.key) || pending.has(i.key), problem = isSending ? "" : problemOf(i);
   const sent = isSent(i) && !problem;
   const el = h("li", { class: "item" + (sent ? " sent" : "") + (problem ? " bad" : "") + (isSending ? " sending" : "") + (flashId === i.key ? " flash" : "") },
     h("div", { class: "mark", "aria-hidden": "true" }, isSending ? null : problem ? icon("alert", 16, 3) : sent ? icon("check", 14, 3.4) : null),
@@ -414,7 +428,7 @@ function card(i) {
         !problem && (seenKnown || isSending) ? h("span", { class: "state" }, isSending ? "Sending..." : sent ? "Sent" : "New") : null,
         h("a", { class: "post", href: safeUrl(i.link), target: "_blank", rel: "noopener", "aria-label": "Open the website post", title: "Open the website post" }, icon("link", 14))),
       problem ? h("div", { class: "reason" }, tidy(problem)) : null),
-    h("button", { class: "send", disabled: busy, "aria-label": problem ? "Try sending again" : sent ? "Send again to Telegram" : "Send to Telegram",
+    h("button", { class: "send", disabled: busy || pending.has(i.key), "aria-label": problem ? "Try sending again" : sent ? "Send again to Telegram" : "Send to Telegram",
       title: problem ? "Try sending again" : sent ? "Send again to Telegram" : "Send to Telegram", onclick: () => sendItems([i], isSent(i)) }, icon("send", 20)));
   return el;
 }
@@ -429,11 +443,11 @@ function render() {
   hint.hidden = !!(tg && tg.initData);
   hint.textContent = "Open this page from the Telegram bot menu to send files.";
 
-  const fresh = seenKnown ? [...st.items.values()].filter(i => !seen.has(i.key)) : [];
+  const fresh = seenKnown ? [...st.items.values()].filter(i => !seen.has(i.key) && !pending.has(i.key)) : [];
   const fab = $("sendNew");
   fab.hidden = !fresh.length;
   fab.disabled = busy;
-  fab.replaceChildren(icon("send", 20), busy ? "Sending..." : "Send " + fresh.length + " new");
+  fab.replaceChildren(icon("send", 20), busy ? "Preparing..." : "Send " + fresh.length + " new");
 
   const ul = $("list"); ul.replaceChildren();
   if (st.loading && !st.items.size) for (let n = 0; n < 5; n++) ul.append(h("li", { class: "skeleton" }));
@@ -520,7 +534,7 @@ $("q").addEventListener("keydown", e => {
 });
 $("clear").addEventListener("click", () => { query = ""; $("q").value = ""; suggestOpen = false; render(); });
 $("scrim").addEventListener("click", () => { suggestOpen = false; $("q").blur(); renderSuggest(); });
-$("sendNew").addEventListener("click", () => sendItems([...stateOf(site()).items.values()].filter(i => !seen.has(i.key)).sort((a, b) => b.time - a.time), false));
+$("sendNew").addEventListener("click", () => sendItems([...stateOf(site()).items.values()].filter(i => !seen.has(i.key) && !pending.has(i.key)).sort((a, b) => b.time - a.time), false));
 window.addEventListener("resize", fitNames);
 
 render(); loadMore(); refreshStatus();
