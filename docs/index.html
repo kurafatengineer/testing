@@ -9,14 +9,14 @@
 <style>
   :root {
     --bg:#ffffff; --ink:#0a0a0a; --muted:#6b6b6b; --line:#e4e4e4; --card:#fafafa;
-    --inv-bg:#0a0a0a; --inv-ink:#ffffff; --ok:#15803d; --ok-bg:#eefaf1; --ok-line:#b7e4c4; --bad:#b91c1c; --bad-bg:#fff1f1; --bad-line:#f3b8b8;
-    --shadow:0 10px 30px rgba(0,0,0,.12); --link:#1a6cf0; --panel:#ffffff; --field:#f1f1f1;
+    --inv-bg:#0a0a0a; --inv-ink:#ffffff; --ok:#15803d; --ok-bg:#e2f5e7; --ok-line:#b7e4c4; --bad:#b91c1c; --bad-bg:#fde8e8; --bad-line:#f3b8b8;
+    --shadow:0 10px 30px rgba(0,0,0,.12); --link:#1a6cf0; --panel:#ffffff; --field:#f1f1f1; --tile:#f3f3f3;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg:#000000; --ink:#f5f5f5; --muted:#8e8e8e; --line:#262626; --card:#0e0e0e;
-      --inv-bg:#f5f5f5; --inv-ink:#000000; --ok:#4ade80; --ok-bg:#08170d; --ok-line:#1b4d2b; --bad:#f87171; --bad-bg:#1a0808; --bad-line:#5c1d1d;
-      --shadow:0 10px 30px rgba(0,0,0,.6); --link:#7ab0ff; --panel:#1c1c1e; --field:#2c2c2e;
+      --inv-bg:#f5f5f5; --inv-ink:#000000; --ok:#4ade80; --ok-bg:#0d2817; --ok-line:#1b4d2b; --bad:#f87171; --bad-bg:#2b1010; --bad-line:#5c1d1d;
+      --shadow:0 10px 30px rgba(0,0,0,.6); --link:#7ab0ff; --panel:#1c1c1e; --field:#2c2c2e; --tile:#141414;
     }
   }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -77,9 +77,9 @@
   /* ---------- tiles ---------- */
   ul { list-style:none; margin:0; padding:0; }
   .item { display:grid; grid-template-columns:26px minmax(0,1fr) 46px; gap:12px; align-items:center; padding:14px;
-    margin-top:10px; border:1px solid var(--line); border-radius:22px; background:var(--card); }
-  .item.sent { background:var(--ok-bg); border-color:var(--ok-line); }
-  .item.bad { background:var(--bad-bg); border-color:var(--bad-line); }
+    margin-top:10px; border:0; border-radius:22px; background:var(--tile); }
+  .item.sent { background:var(--ok-bg); }
+  .item.bad { background:var(--bad-bg); }
   .item.flash { animation:flash 1.6s ease; }
   @keyframes flash { 0%,60% { box-shadow:0 0 0 3px var(--ink); } 100% { box-shadow:0 0 0 3px transparent; } }
   .mark { width:26px; height:26px; border-radius:50%; display:grid; place-items:center; border:1.5px solid var(--line); color:transparent; }
