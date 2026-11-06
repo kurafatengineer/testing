@@ -10,13 +10,13 @@
   :root {
     --bg:#ffffff; --ink:#0a0a0a; --muted:#6b6b6b; --line:#e4e4e4; --card:#fafafa;
     --inv-bg:#0a0a0a; --inv-ink:#ffffff; --ok:#15803d; --ok-bg:#e2f5e7; --ok-line:#b7e4c4; --bad:#b91c1c; --bad-bg:#fde8e8; --bad-line:#f3b8b8;
-    --shadow:0 10px 30px rgba(0,0,0,.12); --link:#1a6cf0; --panel:#ffffff; --field:#f1f1f1; --tile:#f3f3f3;
+    --shadow:0 10px 30px rgba(0,0,0,.12); --link:#1a6cf0; --panel:#ffffff; --field:#f1f1f1; --tile:#f3f3f3; --new:#1a6cf0; --new-bg:#e3ecff; --on-new:#ffffff;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg:#000000; --ink:#f5f5f5; --muted:#8e8e8e; --line:#262626; --card:#0e0e0e;
       --inv-bg:#f5f5f5; --inv-ink:#000000; --ok:#4ade80; --ok-bg:#0d2817; --ok-line:#1b4d2b; --bad:#f87171; --bad-bg:#2b1010; --bad-line:#5c1d1d;
-      --shadow:0 10px 30px rgba(0,0,0,.6); --link:#7ab0ff; --panel:#1c1c1e; --field:#2c2c2e; --tile:#141414;
+      --shadow:0 10px 30px rgba(0,0,0,.6); --link:#7ab0ff; --panel:#1c1c1e; --field:#2c2c2e; --tile:#141414; --new:#7ab0ff; --new-bg:#0f1c36; --on-new:#00122e;
     }
   }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -78,6 +78,11 @@
   ul { list-style:none; margin:0; padding:0; }
   .item { display:grid; grid-template-columns:26px minmax(0,1fr) 46px; gap:12px; align-items:center; padding:14px;
     margin-top:10px; border:0; border-radius:22px; background:var(--tile); }
+  .item.fresh { background:var(--new-bg); }
+  .item.fresh .mark { border-color:var(--new); background:transparent; }
+  .item.fresh .mark::after { content:""; width:10px; height:10px; border-radius:50%; background:var(--new); }
+  .item.fresh .state { color:var(--new); }
+  .item.fresh .send { background:var(--new); color:var(--on-new); }
   .item.sent { background:var(--ok-bg); }
   .item.bad { background:var(--bad-bg); }
   .item.flash { animation:flash 1.6s ease; }
@@ -138,6 +143,11 @@
     width:min(92vw, 560px); padding:14px 18px; border-radius:20px; background:var(--inv-bg); color:var(--inv-ink);
     font-size:14px; line-height:1.4; opacity:0; pointer-events:none; transition:.25s; z-index:30; text-align:center; }
   #toast.on { opacity:1; transform:translate(-50%,0); }
+  .lock { text-align:center; padding:72px 24px; color:var(--muted); }
+  .lock .ring { width:72px; height:72px; margin:0 auto 18px; border-radius:50%; background:var(--tile); color:var(--ink); display:grid; place-items:center; }
+  .lock h2 { margin:0 0 6px; color:var(--ink); font-size:20px; letter-spacing:-.01em; }
+  .lock p { margin:0; }
+  body.denied .search, body.denied #sites, body.denied #hint { display:none; }
   [hidden] { display:none !important; }
   @media (prefers-reduced-motion: reduce) {
     * { animation:none !important; transition:none !important; }
@@ -211,6 +221,7 @@ const ICONS = {
   alert:  ["M12 7v6", "M12 17.2v.01"],
   file:   ["M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z", "M14 3v5h5"],
   arrow:  ["M5 12h14", "M13 6l6 6-6 6"],
+  lock:   ["M6 11h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z", "M8 11V8a4 4 0 0 1 8 0v3"],
   globe:  ["M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z", "M3 12h18", "M12 3c2.5 2.5 3.8 5.5 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.5-3.8-9S9.5 5.5 12 3z"]
 };
 function icon(name, size = 18, width = 2) {
@@ -241,6 +252,7 @@ let cur = Math.min(Math.max(store.get("cur", 0), 0), allSites().length - 1);
 const data = new Map();            // site url -> {items: Map, page, done, loading, error}
 let seen = new Set(), seenKnown = false;
 let issues = {};
+let denied = false;                // the server said this Telegram account is not the owner
 let pending = new Set();           // posts waiting in the Apps Script queue (sent in the background)                   // post key -> why its PDF could not be sent (kept by the Apps Script)
 const failedNow = new Set();       // posts that failed to send in this session
 let query = "", suggestOpen = false, flashId = null;
@@ -323,7 +335,7 @@ function applyStatus(j) {
 
 async function refreshStatus() {
   try { applyStatus(await callScript({ action: "status" })); }
-  catch (e) { seenKnown = false; if (tg && tg.initData) toast("Could not load the sent status: " + e.message); }
+  catch (e) { seenKnown = false; if (e.message === "not allowed") denied = true; else if (tg && tg.initData) toast("Could not load the sent status: " + e.message); }
   render(); startPolling();
 }
 
@@ -419,8 +431,8 @@ function fitNames() {
 
 function card(i) {
   const isSending = sending.has(i.key) || pending.has(i.key), problem = isSending ? "" : problemOf(i);
-  const sent = isSent(i) && !problem;
-  const el = h("li", { class: "item" + (sent ? " sent" : "") + (problem ? " bad" : "") + (isSending ? " sending" : "") + (flashId === i.key ? " flash" : "") },
+  const sent = isSent(i) && !problem, fresh = seenKnown && !isSent(i) && !problem && !isSending;
+  const el = h("li", { class: "item" + (sent ? " sent" : "") + (fresh ? " fresh" : "") + (problem ? " bad" : "") + (isSending ? " sending" : "") + (flashId === i.key ? " flash" : "") },
     h("div", { class: "mark", "aria-hidden": "true" }, isSending ? null : problem ? icon("alert", 16, 3) : sent ? icon("check", 14, 3.4) : null),
     h("div", { style: "min-width:0" },
       h("div", { class: "name", title: i.title }, h("span", { class: "t" }, i.title)),
@@ -434,6 +446,13 @@ function card(i) {
 }
 
 function render() {
+  document.body.classList.toggle("denied", denied);
+  if (denied) {
+    $("sendNew").hidden = true; $("suggest").hidden = true; $("scrim").hidden = true; $("foot").replaceChildren();
+    $("list").replaceChildren(h("li", { class: "lock" }, h("div", { class: "ring" }, icon("lock", 30, 1.8)),
+      h("h2", {}, "Private app"), h("p", {}, "This app is only for its owner.")));
+    return;
+  }
   renderSites();
   $("icoSearch").replaceChildren(icon("search", 18));
   $("clear").replaceChildren(icon("close", 12, 3.2)); $("clear").hidden = !query;

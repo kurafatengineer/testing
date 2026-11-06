@@ -29,6 +29,59 @@ function cfg_(key, fallback) {
   return (v && v.trim()) || fallback;
 }
 
+// ---------------------------------------------------------- कौन इस्तेमाल कर सकता है
+// सिर्फ़ मालिक (TELEGRAM_CHAT_ID वाला निजी खाता)। और लोगों को जोड़ना हो तो Script property
+// ALLOWED_USER_IDS में उनके Telegram user id कॉमा से अलग करके डालिए।
+function isAllowed_(userId, chat) {
+  var extra = String(cfg_('ALLOWED_USER_IDS', '')).split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+  if (extra.indexOf(String(userId)) !== -1) return true;
+  return String(chat).charAt(0) !== '-' && String(userId) === String(chat);
+}
+
+// Telegram के संदेश (Hi / Start) इसी Web App पर आते हैं। पता गुप्त कुंजी (?k=...) से सुरक्षित रहता है,
+// जो bot token से बनती है; Telegram के अलावा कोई और इस रास्ते से कुछ नहीं करवा सकता।
+var DEFAULT_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyRP4WC23dmnYcUwD16HnSe3eUPwDytA9MhKl0SgccbeVLqpZV-dS6gcL8JW8L5cBaS/exec';
+
+function hookSecret_(token) {
+  return toHex_(Utilities.computeHmacSha256Signature('telegram-webhook', token)).slice(0, 32);
+}
+
+/** एक बार चलाइए: Telegram को बताता है कि संदेश इस Web App पर भेजे। */
+function setupWebhook() {
+  var token = cfg_('TELEGRAM_BOT_TOKEN');
+  if (!token) throw new Error('TELEGRAM_BOT_TOKEN not set');
+  var url = cfg_('WEBAPP_URL', DEFAULT_WEBAPP_URL) + '?k=' + hookSecret_(token);
+  var res = UrlFetchApp.fetch('https://api.telegram.org/bot' + token + '/setWebhook', {
+    method: 'post', muteHttpExceptions: true,
+    payload: { url: url, allowed_updates: JSON.stringify(['message']), drop_pending_updates: 'true' } });
+  Logger.log(res.getContentText().replace(token, '***'));
+}
+
+/** Telegram का एक संदेश: मालिक को स्वागत, बाकी सबको "यह निजी बॉट है"। */
+function handleUpdate_(update, token, chat) {
+  var msg = update.message;
+  if (!msg || !msg.from || !msg.chat || msg.chat.type !== 'private' || msg.from.is_bot) return;
+  var props = PropertiesService.getScriptProperties();
+  var last = Number(props.getProperty('last_update') || 0);
+  if (update.update_id <= last) return;                      // Telegram कभी-कभी वही संदेश दोबारा भेजता है
+  props.setProperty('last_update', String(update.update_id));
+
+  var name = esc_(String(msg.from.first_name || 'there').slice(0, 40));
+  if (isAllowed_(msg.from.id, chat)) {
+    tgMessage_(token, msg.chat.id, '👋 Welcome back, <b>' + name + '</b>!\n\n' +
+      'Tap the <b>menu button</b> next to the message box to open your Test Series app. ' +
+      'From there you can pick files and they will be sent to this chat.');
+    return;
+  }
+  var cache = CacheService.getScriptCache(), k = 'visitor:' + msg.from.id;
+  if (cache.get(k)) return;                                  // एक ही व्यक्ति को बार-बार जवाब नहीं
+  cache.put(k, '1', 21600);
+  tgMessage_(token, msg.chat.id, '👋 Hi <b>' + name + '</b>!\n\n' +
+    '🔒 This is a <b>private bot</b>. It sends UPSC CSE test series files to its owner only, ' +
+    'so there is nothing here for you to start or download.\n\n' +
+    'Thanks for stopping by!');
+}
+
 // -------------------------------------------------- "भेजी जा चुकी" सूची
 // Script property की सीमा 9 KB है, इसलिए सूची कई टुकड़ों में रखी जाती है।
 
@@ -102,8 +155,7 @@ function mainLink_(post) {
 }
 
 function header_(post, extra) {
-  return a_(mainLink_(post), post.title) + (extra ? ' ' + esc_(extra) : '') +
-         '\n🌐 ' + a_(post.link, 'Website post');
+  return a_(mainLink_(post), post.title) + (extra ? ' ' + esc_(extra) : '');
 }
 
 /** पोस्ट की सारी PDF खोजता है: ok = भेजने लायक, manual = खुद डाउनलोड करनी होंगी। */
@@ -382,8 +434,15 @@ function doPost(e) {
     var token = cfg_('TELEGRAM_BOT_TOKEN'), chat = cfg_('TELEGRAM_CHAT_ID');
     if (!token || !chat) throw new Error('TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set');
     var body = JSON.parse(e.postData.contents);
+
+    if (body.update_id !== undefined) {                      // Telegram से आया संदेश (webhook)
+      if (!e.parameter || e.parameter.k !== hookSecret_(token)) return ContentService.createTextOutput('ok');
+      try { handleUpdate_(body, token, chat); } catch (hookErr) { Logger.log('webhook: ' + String(hookErr.message).replace(token, '***')); }
+      return ContentService.createTextOutput('ok');
+    }
+
     var user = verifyInitData_(body.initData, token);
-    if (String(chat).charAt(0) !== '-' && String(user.id) !== String(chat)) throw new Error('not allowed');
+    if (!isAllowed_(user.id, chat)) throw new Error('not allowed');
 
     if (body.action === 'status') return reply_(statusReply_());
 
