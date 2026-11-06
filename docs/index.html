@@ -46,7 +46,7 @@
 
   .search { position:relative; margin-top:2px; perspective:900px; }
   .search .ico { position:absolute; left:16px; top:14px; color:var(--muted); pointer-events:none; }
-  .search input { width:100%; height:48px; padding:0 44px 0 44px; border-radius:999px; border:1px solid var(--line);
+  .search input { width:100%; height:48px; padding:0 44px 0 46px; border-radius:999px; border:1px solid var(--line);
     background:var(--card); outline:none; font-size:16px; }
   .search input:focus { border-color:var(--ink); }
   .search input { -webkit-appearance:none; appearance:none; }
@@ -144,7 +144,7 @@
     <div class="row" id="sites" role="tablist" aria-label="Websites"></div>
     <div class="search">
       <span class="ico" id="icoSearch" aria-hidden="true"></span>
-      <input id="q" type="search" inputmode="search" enterkeyhint="search" autocomplete="off" placeholder="Search files, e.g. Vision, Test 5" aria-label="Search files" aria-controls="suggest" aria-autocomplete="list">
+      <input id="q" type="search" inputmode="search" enterkeyhint="search" autocomplete="off" aria-label="Search files" aria-controls="suggest" aria-autocomplete="list">
       <button class="clear" id="clear" hidden aria-label="Clear search"></button>
       <div class="suggest" id="suggest" role="listbox" hidden></div>
     </div>
