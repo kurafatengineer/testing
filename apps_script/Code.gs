@@ -203,7 +203,7 @@ function verifyInitData_(initData, token) {
   pairs.forEach(function (p) { if (p[0] === 'hash') hash = p[1]; else fields[p[0]] = p[1]; });
   var check = Object.keys(fields).sort().map(function (k) { return k + '=' + fields[k]; }).join('\n');
   var secret = Utilities.computeHmacSha256Signature(token, 'WebAppData');
-  var sig = toHex_(Utilities.computeHmacSha256Signature(check, secret));
+  var sig = toHex_(Utilities.computeHmacSha256Signature(Utilities.newBlob(check).getBytes(), secret));
   if (!hash || sig !== hash) throw new Error('bad initData signature');
   if (Date.now() / 1000 - Number(fields.auth_date || 0) > 86400) throw new Error('initData expired; reopen the Mini App');
   return JSON.parse(fields.user || '{}');
