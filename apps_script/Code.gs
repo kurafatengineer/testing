@@ -79,6 +79,27 @@ function setupWebhook() {
     method: 'post', muteHttpExceptions: true,
     payload: { url: url, allowed_updates: JSON.stringify(['message']), drop_pending_updates: 'true' } });
   Logger.log(res.getContentText().replace(token, '***'));
+  Logger.log('Now run checkWebhook, then send Hi to the bot.');
+}
+
+/** हालत जाँचिए: Telegram का webhook सेट है? कोई error? (token या गुप्त पता कभी नहीं छापता) */
+function checkWebhook() {
+  var token = cfg_('TELEGRAM_BOT_TOKEN');
+  if (!token) throw new Error('TELEGRAM_BOT_TOKEN not set');
+  function tg(method) {
+    var res = UrlFetchApp.fetch('https://api.telegram.org/bot' + token + '/' + method, { muteHttpExceptions: true });
+    return JSON.parse(res.getContentText());
+  }
+  var me = tg('getMe'), info = tg('getWebhookInfo');
+  if (!me.ok) { Logger.log('Telegram rejected the bot token: ' + me.description); return; }
+  var r = info.result || {};
+  var app = cfg_('WEBAPP_URL', DEFAULT_WEBAPP_URL);
+  Logger.log('Bot: @' + me.result.username);
+  Logger.log('Webhook set: ' + (r.url ? 'YES' : 'NO  ->  run setupWebhook'));
+  if (r.url) Logger.log('Points to this web app: ' + (r.url.indexOf(app) === 0 ? 'YES' : 'NO  ->  set WEBAPP_URL to your /exec address and run setupWebhook again'));
+  Logger.log('Waiting updates: ' + (r.pending_update_count || 0));
+  Logger.log('Last Telegram error: ' + (r.last_error_message ? r.last_error_message + ' (' + new Date(r.last_error_date * 1000).toISOString() + ')' : 'none'));
+  Logger.log('Mode: ' + getMode_() + ' | owner chat id: ' + (cfg_('TELEGRAM_CHAT_ID') ? 'set' : 'MISSING'));
 }
 
 /** Telegram का एक संदेश (Hi / Start): मालिक को स्वागत; Public में सबको स्वागत; Private में "निजी बॉट" का संदेश। */
