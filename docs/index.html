@@ -2,112 +2,378 @@
 <html lang="hi">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>UPSC Test Series</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Test Series Download</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
-  :root { --bg:#fff; --fg:#111; --muted:#666; --ok:#0a7d32; --bad:#c62828; --card:#f3f3f3; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#17212b; --fg:#eee; --muted:#9aa; --card:#22303c; --ok:#4cd07d; --bad:#ff6b6b; } }
-  body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, sans-serif; }
-  h1 { font-size:20px; margin:0 0 12px; }
-  button { width:100%; padding:14px; font-size:16px; border:0; border-radius:10px; background:#2a9df4; color:#fff; }
-  .card { background:var(--card); border-radius:10px; padding:12px; margin-top:12px; word-break:break-word; }
-  .ok { color:var(--ok); font-weight:600; } .bad { color:var(--bad); font-weight:600; }
-  small { color:var(--muted); }
-  a { color:#2a9df4; }
-  .links a { display:block; margin-top:6px; }
+  :root {
+    --bg:#ffffff; --ink:#0a0a0a; --muted:#6b6b6b; --line:#e4e4e4; --card:#fafafa;
+    --inv-bg:#0a0a0a; --inv-ink:#ffffff; --ok:#15803d; --ok-bg:#e8f5ec; --bad:#b91c1c;
+    --radius:16px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:#000000; --ink:#f5f5f5; --muted:#8e8e8e; --line:#262626; --card:#0e0e0e;
+      --inv-bg:#f5f5f5; --inv-ink:#000000; --ok:#4ade80; --ok-bg:#0f2417; --bad:#f87171;
+    }
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html { -webkit-text-size-adjust:100%; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Devanagari", system-ui, sans-serif;
+    padding-bottom:calc(96px + env(safe-area-inset-bottom)); }
+  button, input { font:inherit; color:inherit; }
+  button { cursor:pointer; }
+  :focus-visible { outline:2px solid var(--ink); outline-offset:2px; }
+  .wrap { max-width:640px; margin:0 auto; padding:0 16px; }
+
+  /* ---------- header ---------- */
+  header { position:sticky; top:0; z-index:5; background:color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter:saturate(180%) blur(14px); -webkit-backdrop-filter:saturate(180%) blur(14px);
+    border-bottom:1px solid var(--line); padding-top:env(safe-area-inset-top); }
+  .title { display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding:14px 0 4px; }
+  h1 { margin:0; font-size:22px; letter-spacing:-.02em; font-weight:750; }
+  .count { color:var(--muted); font-size:13px; white-space:nowrap; }
+  .row { display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; padding:8px 0; }
+  .row::-webkit-scrollbar { display:none; }
+  .pill { flex:none; min-height:36px; padding:0 14px; border-radius:999px; border:1px solid var(--line);
+    background:transparent; color:var(--ink); font-size:14px; font-weight:500; }
+  .pill[aria-pressed="true"], .pill[aria-selected="true"] { background:var(--inv-bg); color:var(--inv-ink); border-color:var(--inv-bg); }
+  .pill.add { color:var(--muted); border-style:dashed; }
+  .search { position:relative; margin:4px 0 6px; }
+  .search svg { position:absolute; left:14px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none; }
+  .search input { width:100%; height:46px; padding:0 40px 0 42px; border-radius:14px; border:1px solid var(--line);
+    background:var(--card); outline:none; font-size:16px; }
+  .search input:focus { border-color:var(--ink); }
+  .search .clear { position:absolute; right:6px; top:50%; transform:translateY(-50%); width:34px; height:34px; border:0;
+    background:transparent; color:var(--muted); font-size:20px; }
+  .filters { padding-top:0; padding-bottom:12px; }
+  .filters .pill { min-height:32px; font-size:13px; padding:0 12px; }
+
+  /* ---------- actions ---------- */
+  .primary { width:100%; min-height:52px; border:0; border-radius:var(--radius); background:var(--inv-bg); color:var(--inv-ink);
+    font-size:16px; font-weight:650; letter-spacing:-.01em; margin:16px 0 6px; }
+  .primary:disabled { opacity:.35; cursor:default; }
+  .hint { color:var(--muted); font-size:13px; margin:0 2px 8px; }
+
+  /* ---------- list ---------- */
+  ul { list-style:none; margin:0; padding:0; }
+  .item { display:grid; grid-template-columns:28px 1fr; gap:12px; padding:16px 14px; margin-top:10px;
+    border:1px solid var(--line); border-radius:var(--radius); background:var(--card); }
+  .item.sent { background:var(--bg); }
+  .mark { width:26px; height:26px; border-radius:50%; display:grid; place-items:center; margin-top:1px;
+    border:1.5px solid var(--line); color:transparent; }
+  .item.sent .mark { background:var(--ok); border-color:var(--ok); color:#fff; }
+  .item.sending .mark { border-color:var(--ink); border-top-color:transparent; animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .name { font-weight:620; font-size:15.5px; line-height:1.4; letter-spacing:-.005em; overflow-wrap:anywhere; }
+  .meta { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin-top:6px; color:var(--muted); font-size:13px; }
+  .tag { padding:1px 8px; border:1px solid var(--line); border-radius:999px; font-size:12px; color:var(--muted); }
+  .state { font-weight:600; }
+  .item.sent .state { color:var(--ok); }
+  .actions { display:flex; gap:8px; margin-top:12px; }
+  .btn { min-height:40px; padding:0 16px; border-radius:12px; border:1px solid var(--ink); background:var(--ink); color:var(--bg);
+    font-size:14px; font-weight:600; display:inline-flex; align-items:center; gap:6px; text-decoration:none; }
+  .item.sent .btn.send { background:transparent; color:var(--ink); border-color:var(--line); }
+  .btn.ghost { background:transparent; color:var(--ink); border-color:var(--line); font-weight:500; }
+  .btn:disabled { opacity:.4; cursor:default; }
+
+  .empty, .error { text-align:center; color:var(--muted); padding:48px 16px; }
+  .error { color:var(--bad); }
+  .more { width:100%; min-height:46px; margin-top:14px; border-radius:14px; border:1px solid var(--line); background:transparent; font-weight:500; }
+  .skeleton { height:96px; margin-top:10px; border-radius:var(--radius); background:linear-gradient(90deg,var(--card),var(--line),var(--card));
+    background-size:200% 100%; animation:sh 1.4s ease infinite; }
+  @keyframes sh { from { background-position:200% 0; } to { background-position:-200% 0; } }
+  .linkbtn { background:none; border:0; color:var(--muted); text-decoration:underline; padding:8px 2px; font-size:13px; }
+
+  /* ---------- add-site panel + toast ---------- */
+  .panel { margin:10px 0; padding:14px; border:1px solid var(--line); border-radius:var(--radius); background:var(--card); }
+  .panel label { display:block; font-weight:600; margin-bottom:8px; }
+  .panel input { width:100%; height:44px; padding:0 12px; border-radius:12px; border:1px solid var(--line); background:var(--bg); font-size:16px; }
+  .panel .actions { margin-top:10px; }
+  .panel p { margin:8px 0 0; font-size:13px; color:var(--muted); }
+  #toast { position:fixed; left:50%; bottom:calc(18px + env(safe-area-inset-bottom)); transform:translate(-50%,24px);
+    width:min(92vw, 560px); padding:14px 16px; border-radius:14px; background:var(--inv-bg); color:var(--inv-ink);
+    font-size:14px; line-height:1.4; opacity:0; pointer-events:none; transition:.25s; z-index:10; }
+  #toast.on { opacity:1; transform:translate(-50%,0); }
+  [hidden] { display:none !important; }
+  @media (prefers-reduced-motion: reduce) { * { animation:none !important; transition:none !important; } }
 </style>
 </head>
 <body>
-<h1>UPSC Prelims Test Series 2027</h1>
-<p><small>upscpdf.com की सबसे नई पोस्ट और उनकी Drive फ़ाइलें।</small></p>
-<button id="send">📥 आज की सारी नई फ़ाइलें Telegram पर भेजें</button>
-<p><small>दबाने पर जो फ़ाइलें अब तक आपको नहीं मिलीं, वे सब Telegram पर आ जाएँगी (कुछ मिनट लग सकते हैं, पेज खुला रखिए)।</small></p>
-<div id="status"></div>
-<button id="go" style="background:#555;margin-top:8px">सूची ताज़ा करें</button>
-<div id="out"></div>
+<header>
+  <div class="wrap">
+    <div class="title"><h1>Test Series 2027</h1><span class="count" id="count"></span></div>
+    <div class="row" id="sites" role="tablist" aria-label="वेबसाइट"></div>
+    <div class="search">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" inputmode="search" enterkeyhint="search" autocomplete="off" placeholder="फ़ाइल खोजिए… जैसे Vision, Test 5" aria-label="खोजें">
+      <button class="clear" id="clear" hidden aria-label="खोज मिटाएँ">×</button>
+    </div>
+    <div class="row filters" id="chips" aria-label="फ़िल्टर"></div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="panel" id="addPanel" hidden>
+    <label for="siteUrl">वेबसाइट का पता</label>
+    <input id="siteUrl" type="url" inputmode="url" autocapitalize="off" autocomplete="off" placeholder="example.com">
+    <p>सिर्फ़ WordPress वेबसाइट चलती हैं, जिनकी पोस्ट में Google Drive के लिंक हों।</p>
+    <div class="actions">
+      <button class="btn" id="addGo">जोड़ें</button>
+      <button class="btn ghost" id="addCancel">रद्द करें</button>
+    </div>
+  </div>
+
+  <button class="primary" id="sendNew" disabled>📥 सारी नई फ़ाइलें Telegram पर भेजें</button>
+  <p class="hint" id="hint"></p>
+  <ul id="list" aria-live="polite"></ul>
+  <div id="foot"></div>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+
 <script>
-const tg = window.Telegram && Telegram.WebApp; if (tg) tg.ready();
-const API = "https://upscpdf.com/wp-json/wp/v2";
-const CATEGORY = "Prelims TEST Series", YEAR = "2027";
-const out = document.getElementById("out");
+"use strict";
+const tg = window.Telegram && Telegram.WebApp;
+if (tg) { tg.ready(); try { tg.expand(); } catch (e) {} }
+
+/* ------------------------------ सेटिंग ------------------------------ */
+const YEAR = "2027";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyRP4WC23dmnYcUwD16HnSe3eUPwDytA9MhKl0SgccbeVLqpZV-dS6gcL8JW8L5cBaS/exec";
+const BUILTIN = [{ name: "UPSC PDF", url: "https://upscpdf.com" }];   // और वेबसाइट यहाँ जोड़ी जा सकती हैं
+const PAGE = 50, BATCH = 8;
 const FILE_RE = /drive\.google\.com\/file\/d\/([A-Za-z0-9_-]{10,})/g;
 const FOLDER_RE = /https?:\/\/drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\/[A-Za-z0-9_-]{10,}/g;
-const text = h => { const d = document.createElement("div"); d.innerHTML = h || ""; return d.textContent.trim(); };
-function card() { const d = document.createElement("div"); d.className = "card"; out.appendChild(d); return d; }
-function note(msg, cls) { const d = card(); const s = document.createElement("span"); if (cls) s.className = cls; s.textContent = msg; d.appendChild(s); }
-function link(parent, href, label) { const a = document.createElement("a"); a.href = href; a.target = "_blank"; a.rel = "noopener"; a.textContent = label; parent.appendChild(a); }
-async function getJson(url) { const r = await fetch(url, { cache: "no-store" }); if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }
+const CHIPS = [["all", "सब", null], ["prelims", "Prelims", /prelims/i], ["mains", "Mains", /mains/i],
+               ["hindi", "Hindi", /hindi/i], ["english", "English", /english/i]];
 
-// Apps Script Web App का /exec पता। खाली हो तो पहली बार पूछेगा और फ़ोन में याद रखेगा।
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyRP4WC23dmnYcUwD16HnSe3eUPwDytA9MhKl0SgccbeVLqpZV-dS6gcL8JW8L5cBaS/exec";
-let LAST = [];
-const statusBox = document.getElementById("status");
-function setStatus(msg, cls) { statusBox.innerHTML = ""; const d = document.createElement("div"); d.className = "card" + (cls ? " " + cls : ""); d.textContent = msg; statusBox.appendChild(d); }
-function scriptUrl() {
-  let u = APPS_SCRIPT_URL;
-  try { u = u || localStorage.getItem("scriptUrl") || ""; } catch (e) {}
-  if (!u) {
-    u = (prompt("Apps Script Web App का /exec वाला पता paste कीजिए:") || "").trim();
-    if (u) { try { localStorage.setItem("scriptUrl", u); } catch (e) {} }
-  }
-  return u;
-}
-document.getElementById("send").onclick = async () => {
-  const url = scriptUrl();
-  if (!url) { setStatus("❌ Web App का पता चाहिए", "bad"); return; }
-  if (!tg || !tg.initData) { setStatus("❌ इसे Telegram के अंदर बॉट के मेन्यू से खोलिए", "bad"); return; }
-  if (!LAST.length) { setStatus("पोस्ट की सूची लोड हो रही है..."); await load(); }
-  if (!LAST.length) { setStatus("❌ भेजने के लिए कोई पोस्ट नहीं मिली", "bad"); return; }
-  setStatus("भेज रहा हूँ... " + LAST.length + " पोस्ट जाँच रहा हूँ, पेज खुला रखिए");
-  try {
-    const r = await fetch(url, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ initData: tg.initData, posts: LAST }) });
-    const j = await r.json();
-    if (!j.ok) throw new Error(j.error || "अज्ञात गड़बड़ी");
-    setStatus("✅ " + j.sent + " पोस्ट भेजी गईं, " + j.already + " पहले ही आ चुकी थीं" +
-      (j.failed ? ", " + j.failed + " फेल (दोबारा दबाइए)" : "") +
-      (j.left ? ", " + j.left + " बाकी (फिर से दबाइए)" : ""), j.failed || j.left ? "bad" : "ok");
-  } catch (e) {
-    setStatus("❌ " + e.message + " (Telegram में फ़ाइलें आई हों तो देख लीजिए)", "bad");
-  }
+/* ------------------------------ सहायक ------------------------------ */
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
 };
-async function load() {
-  out.innerHTML = "";
-  note("लोड हो रहा है...");
-  try {
-    const cats = await getJson(API + "/categories?per_page=100&search=" + encodeURIComponent(CATEGORY));
-    const cat = cats.find(c => text(c.name).toLowerCase() === CATEGORY.toLowerCase());
-    if (!cat) throw new Error("category नहीं मिली");
-    const posts = await getJson(API + "/posts?categories=" + cat.id + "&per_page=30&_fields=id,date_gmt,link,title,content");
-    out.innerHTML = "";
-    const wanted = posts.filter(p => text(p.title.rendered).includes(YEAR));
-    if (!wanted.length) { note("2027 वाली कोई पोस्ट नहीं मिली"); return; }
-    LAST = wanted.map(p => {
-      const html = (p.content && p.content.rendered) || "";
-      return { id: String(p.id), title: text(p.title.rendered), link: p.link,
-               time: new Date(p.date_gmt + "Z").getTime(),
-               files: [...new Set([...html.matchAll(FILE_RE)].map(m => m[1]))],
-               folders: [...new Set(html.match(FOLDER_RE) || [])] };
-    });
-    for (const p of wanted) {
-      const html = (p.content && p.content.rendered) || "";
-      const files = [...new Set([...html.matchAll(FILE_RE)].map(m => m[1]))];
-      const folders = [...new Set(html.match(FOLDER_RE) || [])];
-      const c = card();
-      const t = document.createElement("b"); t.textContent = text(p.title.rendered); c.appendChild(t);
-      const when = document.createElement("div"); when.innerHTML = "<small></small>";
-      when.firstChild.textContent = new Date(p.date_gmt + "Z").toLocaleString("hi-IN"); c.appendChild(when);
-      const box = document.createElement("div"); box.className = "links"; c.appendChild(box);
-      files.forEach((id, i) => link(box, "https://drive.google.com/file/d/" + id + "/view", "📄 PDF " + (files.length > 1 ? i + 1 : "")));
-      folders.forEach(f => link(box, f, "📁 Drive फ़ोल्डर"));
-      link(box, p.link, "🔗 पोस्ट खोलें");
-      if (!files.length && !folders.length) { const s = document.createElement("small"); s.textContent = "पोस्ट में Drive लिंक नहीं मिला"; box.appendChild(s); }
-    }
-  } catch (e) { out.innerHTML = ""; note("❌ " + e.message, "bad"); }
+function h(tag, props, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (k === "class") n.className = v; else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else if (v === true) n.setAttribute(k, ""); else if (v !== false && v != null) n.setAttribute(k, v);
+  }
+  for (const c of kids.flat()) if (c != null) n.append(c);
+  return n;
 }
-document.getElementById("go").onclick = load;
-load();
+const decode = html => new DOMParser().parseFromString(html || "", "text/html").documentElement.textContent.trim();
+const safeUrl = u => /^https?:\/\//i.test(u) ? u : "#";
+const CHECK = () => { const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  s.setAttribute("width", "14"); s.setAttribute("height", "14"); s.setAttribute("viewBox", "0 0 24 24");
+  s.setAttribute("fill", "none"); s.setAttribute("stroke", "currentColor"); s.setAttribute("stroke-width", "3.4");
+  s.setAttribute("stroke-linecap", "round"); s.setAttribute("stroke-linejoin", "round");
+  const p = document.createElementNS("http://www.w3.org/2000/svg", "path"); p.setAttribute("d", "M5 12.5l4.5 4.5L19 7"); s.append(p); return s; };
+
+let toastTimer;
+function toast(msg, ms = 4500) { const t = $("toast"); t.textContent = msg; t.classList.add("on");
+  clearTimeout(toastTimer); if (ms) toastTimer = setTimeout(() => t.classList.remove("on"), ms); }
+
+async function getJson(url) {
+  const r = await fetch(url, { cache: "no-store" });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+
+/* ------------------------------ स्थिति ------------------------------ */
+let customSites = store.get("sites", []).filter(s => s && /^https:\/\//.test(s.url));
+const allSites = () => BUILTIN.concat(customSites);
+let cur = Math.min(Math.max(store.get("cur", 0), 0), allSites().length - 1);
+const data = new Map();            // site url -> {items: Map, page, done, loading, error}
+let seen = new Set(), seenKnown = false;
+let query = "", chip = "all";
+const sending = new Set();
+let busy = false;
+
+const site = () => allSites()[cur];
+const host = s => new URL(s.url).hostname.replace(/^www\./, "");
+const api = s => s.url.replace(/\/$/, "") + "/wp-json/wp/v2";
+// upscpdf.com की पुरानी "भेजी हुई" सूची सादे नंबरों में है; बाकी वेबसाइट के आगे नाम लगता है।
+const keyOf = (s, id) => host(s) === "upscpdf.com" ? String(id) : host(s) + ":" + id;
+const stateOf = s => { if (!data.has(s.url)) data.set(s.url, { items: new Map(), page: 0, done: false, loading: false, error: "" }); return data.get(s.url); };
+
+/* ------------------------------ पोस्ट लाना ------------------------------ */
+async function fetchPosts(s, search, page) {
+  const u = api(s) + "/posts?per_page=" + PAGE + "&page=" + page + "&orderby=date&order=desc" +
+    "&search_columns=post_title&search=" + encodeURIComponent(search) + "&_fields=id,date_gmt,link,title";
+  const list = await getJson(u);
+  return { raw: list.length, items: list.map(p => ({
+    id: p.id, key: keyOf(s, p.id), title: decode(p.title && p.title.rendered), link: p.link,
+    time: p.date_gmt ? Date.parse(p.date_gmt + "Z") : 0 })).filter(i => i.title.includes(YEAR)) };
+}
+
+async function loadMore() {
+  const s = site(), st = stateOf(s);
+  if (st.loading || st.done) return;
+  st.loading = true; st.error = ""; render();
+  try {
+    const r = await fetchPosts(s, YEAR, st.page + 1);
+    st.page++; r.items.forEach(i => st.items.set(i.id, Object.assign(st.items.get(i.id) || {}, i)));
+    if (r.raw < PAGE) st.done = true;
+  } catch (e) { st.error = "सूची नहीं मिली (" + e.message + ")"; }
+  st.loading = false; render();
+}
+
+async function serverSearch() {
+  const s = site(), st = stateOf(s);
+  if (!query.trim()) return;
+  toast("साइट पर खोज रहा हूँ...", 0);
+  try {
+    const r = await fetchPosts(s, query.trim() + " " + YEAR, 1);
+    let added = 0;
+    r.items.forEach(i => { if (!st.items.has(i.id)) { st.items.set(i.id, i); added++; } });
+    toast(added ? added + " नई फ़ाइलें मिलीं" : "साइट पर भी कुछ नहीं मिला");
+  } catch (e) { toast("खोज नहीं हो पाई: " + e.message); }
+  render();
+}
+
+async function ensureContent(s, items) {
+  const need = items.filter(i => !i.files);
+  for (let k = 0; k < need.length; k += 40) {
+    const part = need.slice(k, k + 40);
+    const rows = await getJson(api(s) + "/posts?per_page=40&include=" + part.map(i => i.id).join(",") + "&_fields=id,content");
+    const by = new Map(rows.map(r => [r.id, (r.content && r.content.rendered) || ""]));
+    part.forEach(i => { const html = by.get(i.id) || "";
+      i.files = [...new Set([...html.matchAll(FILE_RE)].map(m => m[1]))];
+      i.folders = [...new Set(html.match(FOLDER_RE) || [])]; });
+  }
+}
+
+/* ------------------------------ Apps Script ------------------------------ */
+async function callScript(body) {
+  if (!tg || !tg.initData) throw new Error("इसे Telegram में बॉट के मेन्यू से खोलिए");
+  const r = await fetch(SCRIPT_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(Object.assign({ initData: tg.initData }, body)) });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || "अज्ञात गड़बड़ी");
+  return j;
+}
+
+async function refreshStatus() {
+  try { seen = new Set((await callScript({ action: "status" })).seen); seenKnown = true; }
+  catch (e) { seenKnown = false; if (tg && tg.initData) toast("भेजी गई फ़ाइलों की स्थिति नहीं मिली: " + e.message); }
+  render();
+}
+
+async function sendItems(items, force) {
+  if (busy) { toast("पहले वाला भेजना पूरा होने दीजिए"); return; }
+  if (!items.length) return;
+  busy = true; const s = site(); items.forEach(i => sending.add(i.key)); render();
+  let sent = 0, failed = 0;
+  try {
+    for (let k = 0; k < items.length; k += BATCH) {
+      const part = items.slice(k, k + BATCH);
+      toast("भेज रहा हूँ... " + Math.min(k + BATCH, items.length) + "/" + items.length + " (पेज खुला रखिए)", 0);
+      await ensureContent(s, part);
+      const j = await callScript({ action: "send", force: !!force, posts: part.map(i => ({
+        id: i.key, title: i.title, link: i.link, time: i.time, files: i.files, folders: i.folders })) });
+      j.done.forEach(id => seen.add(id)); sent += j.sent; failed += j.failed;
+      part.forEach(i => sending.delete(i.key));
+      if (j.left) { failed += j.left; break; }
+      render();
+    }
+    toast(sent ? "✅ " + sent + " पोस्ट Telegram पर भेज दी गईं" + (failed ? " · " + failed + " बाकी, फिर दबाइए" : "")
+               : failed ? "कुछ नहीं भेजा जा सका, फिर कोशिश कीजिए" : "भेजने के लिए कुछ नया नहीं था");
+  } catch (e) { toast("❌ " + e.message, 8000); }
+  items.forEach(i => sending.delete(i.key)); busy = false; render();
+}
+
+/* ------------------------------ दिखाना ------------------------------ */
+function visible() {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const rx = (CHIPS.find(c => c[0] === chip) || [])[2];
+  return [...stateOf(site()).items.values()]
+    .filter(i => (!rx || rx.test(i.title)) && words.every(w => i.title.toLowerCase().includes(w)))
+    .sort((a, b) => b.time - a.time);
+}
+
+function renderSites() {
+  const box = $("sites"); box.replaceChildren();
+  allSites().forEach((s, n) => box.append(h("button", { class: "pill", role: "tab", "aria-selected": String(n === cur),
+    onclick: () => { cur = n; store.set("cur", n); render(); if (!stateOf(site()).page) loadMore(); } }, s.name || host(s))));
+  box.append(h("button", { class: "pill add", onclick: () => { $("addPanel").hidden = false; $("siteUrl").focus(); } }, "+ वेबसाइट"));
+}
+function renderChips() {
+  const box = $("chips"); box.replaceChildren();
+  CHIPS.forEach(([id, label]) => box.append(h("button", { class: "pill", "aria-pressed": String(chip === id),
+    onclick: () => { chip = id; render(); } }, label)));
+}
+
+function card(i) {
+  const isSent = seenKnown && seen.has(i.key), isSending = sending.has(i.key);
+  const date = i.time ? new Date(i.time).toLocaleDateString("hi-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
+  return h("li", { class: "item" + (isSent ? " sent" : "") + (isSending ? " sending" : "") },
+    h("div", { class: "mark", "aria-hidden": "true" }, isSent && !isSending ? CHECK() : null),
+    h("div", {},
+      h("div", { class: "name" }, i.title),
+      h("div", { class: "meta" }, date ? h("span", {}, date) : null,
+        seenKnown ? h("span", { class: "state" }, isSending ? "भेज रहा हूँ..." : isSent ? "भेज दी गई" : "नई") : null),
+      h("div", { class: "actions" },
+        h("button", { class: "btn send", disabled: busy, onclick: () => sendItems([i], isSent) }, isSent ? "↻ फिर से भेजें" : "📥 Telegram पर भेजें"),
+        h("a", { class: "btn ghost", href: safeUrl(i.link), target: "_blank", rel: "noopener" }, "पोस्ट ↗"))));
+}
+
+function render() {
+  renderSites(); renderChips();
+  const s = site(), st = stateOf(s), list = visible();
+  const fresh = list.filter(i => !(seenKnown && seen.has(i.key)));
+  $("count").textContent = st.items.size ? st.items.size + " फ़ाइलें" + (seenKnown ? " · " + [...st.items.values()].filter(i => !seen.has(i.key)).length + " नई" : "") : "";
+  $("clear").hidden = !query;
+
+  const send = $("sendNew");
+  send.disabled = busy || !fresh.length || !seenKnown;
+  send.textContent = busy ? "भेज रहा हूँ..." : fresh.length && seenKnown ? "📥 " + fresh.length + " नई फ़ाइलें Telegram पर भेजें" : "📥 सारी नई फ़ाइलें Telegram पर भेजें";
+  $("hint").textContent = !tg || !tg.initData ? "भेजने के लिए इसे Telegram में बॉट के मेन्यू से खोलिए."
+    : !seenKnown ? "भेजी गई फ़ाइलों की स्थिति लोड हो रही है..." : "";
+
+  const ul = $("list"); ul.replaceChildren();
+  if (st.loading && !st.items.size) for (let n = 0; n < 4; n++) ul.append(h("li", { class: "skeleton" }));
+  list.forEach(i => ul.append(card(i)));
+  const foot = $("foot"); foot.replaceChildren();
+  if (st.error) foot.append(h("div", { class: "error" }, st.error, h("br"), h("button", { class: "linkbtn", onclick: loadMore }, "फिर कोशिश करें")));
+  else if (!st.loading && !list.length) foot.append(h("div", { class: "empty" }, query || chip !== "all" ? "इस खोज में कुछ नहीं मिला." : "कोई फ़ाइल नहीं मिली."));
+  if (query.trim() && !st.loading) foot.append(h("button", { class: "more", onclick: serverSearch }, "“" + query.trim() + "” साइट पर खोजें"));
+  if (!st.done && !st.loading && !st.error && st.items.size) foot.append(h("button", { class: "more", onclick: loadMore }, "और पुरानी फ़ाइलें दिखाएँ"));
+  if (st.loading && st.items.size) foot.append(h("div", { class: "empty" }, "लोड हो रहा है..."));
+  if (cur >= BUILTIN.length) foot.append(h("button", { class: "linkbtn", onclick: removeSite }, "इस वेबसाइट को हटाएँ"));
+}
+
+/* ------------------------------ वेबसाइट जोड़ना ------------------------------ */
+async function addSite() {
+  let u = $("siteUrl").value.trim();
+  if (!u) return;
+  if (!/^https?:\/\//i.test(u)) u = "https://" + u;
+  let url; try { url = new URL(u); } catch (e) { toast("पता सही नहीं है"); return; }
+  const s = { name: url.hostname.replace(/^www\./, ""), url: "https://" + url.hostname };
+  if (allSites().some(x => host(x) === host(s))) { toast("यह वेबसाइट पहले से जुड़ी है"); return; }
+  toast("जाँच रहा हूँ...", 0);
+  try { await getJson(api(s) + "/posts?per_page=1&_fields=id"); }
+  catch (e) { toast("यह वेबसाइट नहीं खुली या WordPress नहीं है (" + e.message + ")", 7000); return; }
+  customSites.push(s); store.set("sites", customSites); cur = allSites().length - 1; store.set("cur", cur);
+  $("addPanel").hidden = true; $("siteUrl").value = ""; toast(s.name + " जुड़ गई"); render(); loadMore();
+}
+function removeSite() {
+  if (cur < BUILTIN.length || !confirm(site().name + " को हटाएँ?")) return;
+  customSites.splice(cur - BUILTIN.length, 1); store.set("sites", customSites); cur = 0; store.set("cur", 0); render();
+}
+
+/* ------------------------------ चालू ------------------------------ */
+let qTimer;
+$("q").addEventListener("input", e => { query = e.target.value; clearTimeout(qTimer); qTimer = setTimeout(render, 120); });
+$("q").addEventListener("keydown", e => { if (e.key === "Enter") { e.target.blur(); if (!visible().length) serverSearch(); } });
+$("clear").addEventListener("click", () => { query = ""; $("q").value = ""; render(); });
+$("sendNew").addEventListener("click", () => sendItems(visible().filter(i => !seen.has(i.key)), false));
+$("addGo").addEventListener("click", addSite);
+$("addCancel").addEventListener("click", () => { $("addPanel").hidden = true; });
+$("siteUrl").addEventListener("keydown", e => { if (e.key === "Enter") addSite(); });
+
+render(); loadMore(); refreshStatus();
 </script>
 </body>
 </html>

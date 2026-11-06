@@ -6,13 +6,12 @@
  *  2. Project Settings (गियर) -> Script properties -> दो property जोड़िए:
  *        TELEGRAM_BOT_TOKEN = BotFather वाला token
  *        TELEGRAM_CHAT_ID   = आपका Chat ID
- *  3. ऊपर function चुनिए  setupTrigger  -> Run  (permissions Allow कीजिए)।
- *     यह हर 10 मिनट में अपने-आप चलने वाला trigger बना देगा।
- *  4. एक बार  runNow  चलाकर Execution log देख लीजिए।
+ *  3. Deploy -> New deployment -> Web app (permissions Allow कीजिए)।
  *
- * ध्यान: upscpdf.com (Cloudflare) Google के सर्वर को रोकता है, इसलिए runNow / trigger से
- * पोस्ट पढ़ना नहीं चलेगा। असली तरीका: Mini App (फ़ोन) पोस्ट की सूची पढ़कर इस Web App (doPost)
- * को भेजता है, और यह script Drive से फ़ाइलें लेकर Telegram पर भेजती है।
+ * वेबसाइटें (Cloudflare) Google के सर्वर को रोकती हैं, इसलिए यह script खुद पोस्ट नहीं पढ़ती।
+ * Mini App (फ़ोन) पोस्ट की सूची पढ़कर इस Web App (doPost) को भेजता है, और यह script
+ * Drive से फ़ाइलें लेकर Telegram पर भेजती है। "भेजी जा चुकी" सूची भी यहीं रहती है और
+ * Mini App में हरे टिक के रूप में दिखती है।
  * Web App बनाना: Deploy -> New deployment -> Web app -> Execute as: Me,
  *   Who has access: Anyone -> Deploy -> /exec वाला URL कॉपी कीजिए।
  *
@@ -20,10 +19,7 @@
  * ध्यान: GitHub Actions वाला बॉट भी चालू रहा तो फ़ाइलें दो बार आएँगी - एक ही रखिए।
  */
 
-var CATEGORY = 'Prelims TEST Series';
-var SITE = 'https://upscpdf.com';
 var MAX_BYTES = 50 * 1024 * 1024;        // Telegram bot upload limit
-var FIRST_RUN_COUNT = 2;                 // पहली बार सिर्फ़ इतनी सबसे नई पोस्ट
 var RUN_BUDGET_MS = 5 * 60 * 1000;       // Apps Script की 6 मिनट की सीमा से पहले रुक जाओ
 
 function cfg_(key, fallback) {
@@ -31,111 +27,40 @@ function cfg_(key, fallback) {
   return (v && v.trim()) || fallback;
 }
 
-function setupTrigger() {
-  ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (t.getHandlerFunction() === 'runNow') ScriptApp.deleteTrigger(t);
-  });
-  ScriptApp.newTrigger('runNow').timeBased().everyMinutes(10).create();
-  Logger.log('Trigger set: runNow every 10 minutes');
+// -------------------------------------------------- "भेजी जा चुकी" सूची
+// Script property की सीमा 9 KB है, इसलिए सूची कई टुकड़ों में रखी जाती है।
+
+function loadSeen_() {
+  var props = PropertiesService.getScriptProperties();
+  var n = props.getProperty('seen_n');
+  var raw = '';
+  if (n !== null) {
+    for (var i = 0; i < Number(n); i++) raw += props.getProperty('seen_' + i) || '';
+  } else {
+    raw = props.getProperty('seen') || '';
+  }
+  try { return raw ? JSON.parse(raw) : []; } catch (e) { return []; }
 }
 
-/** "भेजी हुई" सूची मिटाता है। इसके बाद Mini App का बटन दबाने पर सारी पोस्ट फिर से आएँगी। */
+function saveSeen_(seen) {
+  var props = PropertiesService.getScriptProperties();
+  var old = Number(props.getProperty('seen_n') || 0);
+  var raw = JSON.stringify(seen), parts = [];
+  for (var i = 0; i < raw.length; i += 8000) parts.push(raw.slice(i, i + 8000));
+  parts.forEach(function (p, k) { props.setProperty('seen_' + k, p); });
+  for (var j = parts.length; j < old; j++) props.deleteProperty('seen_' + j);
+  props.setProperty('seen_n', String(parts.length));
+  props.deleteProperty('seen');
+}
+
+/** "भेजी हुई" सूची मिटाता है; Mini App में सारे टिक हट जाएँगे। */
 function resetSeen() {
-  PropertiesService.getScriptProperties().deleteProperty('seen');
+  var props = PropertiesService.getScriptProperties();
+  var n = Number(props.getProperty('seen_n') || 0);
+  for (var i = 0; i < n; i++) props.deleteProperty('seen_' + i);
+  props.deleteProperty('seen_n');
+  props.deleteProperty('seen');
   Logger.log('seen list cleared');
-}
-
-function sendEverything() {
-  PropertiesService.getScriptProperties().deleteProperty('seen');
-  run_(1000);
-}
-
-function runNow() { run_(FIRST_RUN_COUNT); }
-
-function run_(firstRunCount) {
-  var lock = LockService.getScriptLock();
-  if (!lock.tryLock(5000)) { Logger.log('Another run is active; skipping'); return; }
-  try {
-    var started = Date.now();
-    var token = cfg_('TELEGRAM_BOT_TOKEN'), chat = cfg_('TELEGRAM_CHAT_ID');
-    if (!token || !chat) throw new Error('TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set');
-    var year = cfg_('YEAR', '2027');
-
-    var posts = fetchPosts_().filter(function (p) { return p.title.indexOf(year) !== -1; });
-    posts.sort(function (a, b) { return a.time - b.time; });   // oldest first
-    Logger.log('Matching posts: ' + posts.length);
-
-    var props = PropertiesService.getScriptProperties();
-    var raw = props.getProperty('seen');
-    var seen, toSend;
-    if (raw === null) {
-      toSend = firstRunCount > 0 ? posts.slice(-firstRunCount) : [];
-      seen = posts.filter(function (p) { return toSend.indexOf(p) === -1; })
-                  .map(function (p) { return p.id; });
-      Logger.log('First run: sending ' + toSend.length + ', marking ' + seen.length + ' as seen');
-    } else {
-      seen = JSON.parse(raw);
-      toSend = posts.filter(function (p) { return seen.indexOf(p.id) === -1; });
-      Logger.log('New posts to send: ' + toSend.length);
-    }
-    props.setProperty('seen', JSON.stringify(seen));
-
-    for (var i = 0; i < toSend.length; i++) {
-      if (Date.now() - started > RUN_BUDGET_MS) { Logger.log('Time budget reached; rest next run'); break; }
-      var post = toSend[i];
-      Logger.log('Sending: ' + post.title);
-      try {
-        deliver_(post, token, chat);
-      } catch (e) {
-        Logger.log('ERROR (will retry next run): ' + e.message.replace(token, '***'));
-        continue;
-      }
-      seen.push(post.id);
-      props.setProperty('seen', JSON.stringify(seen));
-    }
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-// ---------------------------------------------------------------- feed
-
-function textOf_(html) {
-  return String(html || '').replace(/<[^>]+>/g, '')
-    .replace(/&#8211;/g, '–').replace(/&#8217;/g, "'").replace(/&amp;/g, '&')
-    .replace(/&#038;/g, '&').replace(/&nbsp;/g, ' ').trim();
-}
-
-function getJson_(url) {
-  var res = UrlFetchApp.fetch(url, {
-    muteHttpExceptions: true,
-    headers: { 'Accept': 'application/json', 'User-Agent':
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36' }
-  });
-  if (res.getResponseCode() !== 200) {
-    throw new Error('HTTP ' + res.getResponseCode() + ' from ' + url + ' : ' +
-                    res.getContentText().slice(0, 200));
-  }
-  return JSON.parse(res.getContentText());
-}
-
-function fetchPosts_() {
-  var api = SITE + '/wp-json/wp/v2';
-  var cats = getJson_(api + '/categories?per_page=100&search=' + encodeURIComponent(CATEGORY));
-  var cat = cats.filter(function (c) { return textOf_(c.name).toLowerCase() === CATEGORY.toLowerCase(); })[0];
-  if (!cat) throw new Error('Category not found: ' + CATEGORY);
-  var items = getJson_(api + '/posts?categories=' + cat.id +
-                       '&per_page=30&_fields=id,date_gmt,link,title,content');
-  return items.map(function (it) {
-    var html = (it.content && it.content.rendered) || '';
-    var files = [], folders = [], m;
-    var fileRe = /drive\.google\.com\/file\/d\/([A-Za-z0-9_-]{10,})/g;
-    var folderRe = /https?:\/\/drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\/[A-Za-z0-9_-]{10,}/g;
-    while ((m = fileRe.exec(html))) if (files.indexOf(m[1]) === -1) files.push(m[1]);
-    while ((m = folderRe.exec(html))) if (folders.indexOf(m[0]) === -1) folders.push(m[0]);
-    return { id: String(it.id), title: textOf_(it.title.rendered), link: it.link,
-             time: new Date(it.date_gmt + 'Z').getTime(), files: files, folders: folders };
-  });
 }
 
 // ------------------------------------------------------------ delivery
@@ -315,7 +240,7 @@ function cleanPosts_(list) {
   var folderRe = /^https:\/\/drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\/[A-Za-z0-9_-]{10,}$/;
   return (Array.isArray(list) ? list : []).slice(0, 60).map(function (p) {
     return {
-      id: String(p.id || '').slice(0, 40),
+      id: String(p.id || '').slice(0, 80),
       title: String(p.title || '').slice(0, 300),
       link: String(p.link || '').slice(0, 300),
       time: Number(p.time) || 0,
@@ -331,8 +256,15 @@ function reply_(obj) {
 
 function doGet() { return reply_({ ok: true, info: 'UPSC bot web app is running' }); }
 
+/**
+ * body = { initData, action: 'status' | 'send', posts: [...], force: bool }
+ *  status -> { ok, seen: [ids] }
+ *  send   -> { ok, total, already, sent, failed, left, done: [ids], failedIds: [ids] }
+ *            force=true: "seen" को अनदेखा करके फिर से भेजता है (फ़ाइल दोबारा चाहिए तब)।
+ */
 function doPost(e) {
   var lock = LockService.getScriptLock();
+  var locked = false;
   try {
     var token = cfg_('TELEGRAM_BOT_TOKEN'), chat = cfg_('TELEGRAM_CHAT_ID');
     if (!token || !chat) throw new Error('TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set');
@@ -340,33 +272,36 @@ function doPost(e) {
     var user = verifyInitData_(body.initData, token);
     if (String(chat).charAt(0) !== '-' && String(user.id) !== String(chat)) throw new Error('not allowed');
 
-    if (!lock.tryLock(5000)) throw new Error('another run is active');
+    if (body.action === 'status') return reply_({ ok: true, seen: loadSeen_() });
+
+    if (!lock.tryLock(5000)) throw new Error('दूसरा भेजना अभी चल रहा है, थोड़ी देर बाद फिर कोशिश कीजिए');
+    locked = true;
     var started = Date.now();
-    var props = PropertiesService.getScriptProperties();
-    var raw = props.getProperty('seen');
-    var seen = raw === null ? [] : JSON.parse(raw);
+    var seen = loadSeen_();
+    var force = body.force === true;
     var posts = cleanPosts_(body.posts).sort(function (a, b) { return a.time - b.time; });
-    var todo = posts.filter(function (p) { return seen.indexOf(p.id) === -1; });
-    var sent = 0, failed = 0, left = 0;
+    var todo = posts.filter(function (p) { return force || seen.indexOf(p.id) === -1; });
+    var done = [], failedIds = [], left = 0;
     for (var i = 0; i < todo.length; i++) {
       if (Date.now() - started > RUN_BUDGET_MS) { left = todo.length - i; break; }
       try {
         deliver_(todo[i], token, chat);
-        seen.push(todo[i].id);
-        props.setProperty('seen', JSON.stringify(seen));
-        sent++;
+        if (seen.indexOf(todo[i].id) === -1) seen.push(todo[i].id);
+        saveSeen_(seen);
+        done.push(todo[i].id);
       } catch (err) {
-        failed++;
+        failedIds.push(todo[i].id);
         Logger.log('ERROR: ' + String(err.message).replace(token, '***'));
       }
     }
     return reply_({ ok: true, total: posts.length, already: posts.length - todo.length,
-                    sent: sent, failed: failed, left: left });
+                    sent: done.length, failed: failedIds.length, left: left,
+                    done: done, failedIds: failedIds });
   } catch (err) {
     var msg = String(err.message);
     Logger.log('doPost error: ' + msg);
     return reply_({ ok: false, error: msg.replace(cfg_('TELEGRAM_BOT_TOKEN', '@@'), '***') });
   } finally {
-    try { lock.releaseLock(); } catch (x) {}
+    if (locked) { try { lock.releaseLock(); } catch (x) {} }
   }
 }
