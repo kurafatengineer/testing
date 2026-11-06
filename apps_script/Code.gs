@@ -86,7 +86,7 @@ function mainLink_(post) {
 
 function header_(post, extra) {
   return a_(mainLink_(post), post.title) + (extra ? ' ' + esc_(extra) : '') +
-         '\n🌐 ' + a_(post.link, 'वेबसाइट पोस्ट');
+         '\n🌐 ' + a_(post.link, 'Website post');
 }
 
 /** पोस्ट की सारी PDF खोजता है: ok = भेजने लायक, manual = खुद डाउनलोड करनी होंगी। */
@@ -96,7 +96,7 @@ function listFiles_(post) {
     if (seen[id]) return;
     seen[id] = true;
     if (size > MAX_BYTES) {
-      manual.push({ name: name, url: url, why: 'बहुत बड़ी फ़ाइल (' + Math.round(size / 1048576) + ' MB)' });
+      manual.push({ name: name, url: url, why: 'file too large (' + Math.round(size / 1048576) + ' MB)' });
     } else {
       ok.push({ id: id, name: name, size: size });
     }
@@ -107,7 +107,7 @@ function listFiles_(post) {
       add(id, f.getName(), f.getSize(), viewUrl_(id));
     } catch (e) {
       seen[id] = true;
-      manual.push({ name: 'फ़ाइल ' + (n + 1), url: viewUrl_(id), why: 'Drive से अपने-आप नहीं खुली' });
+      manual.push({ name: 'File ' + (n + 1), url: viewUrl_(id), why: 'could not be opened from Drive' });
     }
   });
   post.folders.forEach(function (url) {
@@ -121,9 +121,9 @@ function listFiles_(post) {
         count++;
         add(f.getId(), f.getName(), f.getSize(), f.getUrl());
       }
-      if (more) manual.push({ name: 'फ़ोल्डर की ' + more + ' और फ़ाइलें', url: url, why: 'फ़ोल्डर खोलकर देखिए' });
+      if (more) manual.push({ name: more + ' more file(s) in the folder', url: url, why: 'open the folder to see them' });
     } catch (e) {
-      manual.push({ name: 'Drive फ़ोल्डर', url: url, why: 'अपने-आप नहीं खुला' });
+      manual.push({ name: 'Drive folder', url: url, why: 'could not be opened automatically' });
     }
   });
   ok.sort(function (x, y) { return x.name < y.name ? -1 : x.name > y.name ? 1 : 0; });
@@ -157,12 +157,12 @@ function groupCaption_(post, files, extra) {
 function deliver_(post, token, chat) {
   var info = listFiles_(post);
   if (!info.ok.length && !info.manual.length) {
-    tgMessage_(token, chat, header_(post) + '\n\n(पोस्ट में Google Drive का लिंक नहीं मिला)');
+    tgMessage_(token, chat, header_(post) + '\n\n(No Google Drive link found in this post)');
     return;
   }
   var groups = chunk_(info.ok);
   groups.forEach(function (g, i) {
-    var extra = groups.length > 1 ? '(भाग ' + (i + 1) + '/' + groups.length + ')' : '';
+    var extra = groups.length > 1 ? '(Part ' + (i + 1) + '/' + groups.length + ')' : '';
     var caption = groupCaption_(post, g, extra);
     var blobs = g.map(function (f) {
       return DriveApp.getFileById(f.id).getBlob().setName(pdfName_(f.name));
@@ -175,7 +175,7 @@ function deliver_(post, token, chat) {
       return '• ' + a_(m.url, m.name) + ' — ' + esc_(m.why);
     });
     tgMessage_(token, chat, header_(post) +
-      '\n\n⚠️ ये फ़ाइलें अपने-आप नहीं भेजी जा सकीं, आपको खुद डाउनलोड करनी होंगी:\n' + lines.join('\n'));
+      '\n\n⚠️ These files could not be sent automatically. Please download them yourself:\n' + lines.join('\n'));
   }
 }
 
@@ -274,7 +274,7 @@ function doPost(e) {
 
     if (body.action === 'status') return reply_({ ok: true, seen: loadSeen_() });
 
-    if (!lock.tryLock(5000)) throw new Error('दूसरा भेजना अभी चल रहा है, थोड़ी देर बाद फिर कोशिश कीजिए');
+    if (!lock.tryLock(5000)) throw new Error('Another send is in progress. Please try again in a moment.');
     locked = true;
     var started = Date.now();
     var seen = loadSeen_();
