@@ -31,6 +31,8 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           YEAR: ${{ vars.YEAR }}
           LANGUAGE: ${{ vars.LANGUAGE }}
+          # Mini App menu button; override with a repository variable MINI_APP_URL.
+          MINI_APP_URL: ${{ vars.MINI_APP_URL || format('https://{0}.github.io/{1}/', github.repository_owner, github.event.repository.name) }}
         run: python bot.py
 
       # Runs even if the bot step failed, so posts that were sent are not sent again.

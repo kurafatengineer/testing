@@ -16,10 +16,14 @@ Environment variables
   FEED_FILE           read the feed from this local file instead (testing)
   SEEN_FILE           where sent guids are stored (default seen.json)
   FIRST_RUN_COUNT     posts to send on the very first run (default 2)
+  MINI_APP_URL        https address of the Mini App page; when set, the bot's
+                      menu button is pointed at it on every run
+  MINI_APP_TEXT       label of that menu button (default "Feed Test")
 
 Usage
   python bot.py            # normal run
   python bot.py --dry-run  # no downloads, no Telegram calls, seen.json untouched
+  python bot.py --setup-menu  # only set the Mini App menu button, then exit
 """
 
 from __future__ import annotations
@@ -49,6 +53,8 @@ YEAR = os.environ.get("YEAR", "2027").strip() or "2027"
 LANGUAGE = os.environ.get("LANGUAGE", "").strip().lower()
 SEEN_FILE = Path(os.environ.get("SEEN_FILE", "seen.json"))
 FIRST_RUN_COUNT = int(os.environ.get("FIRST_RUN_COUNT", "2"))
+MINI_APP_URL = os.environ.get("MINI_APP_URL", "").strip()
+MINI_APP_TEXT = os.environ.get("MINI_APP_TEXT", "").strip() or "Feed Test"
 
 MAX_BYTES = 50 * 1024 * 1024          # Telegram bot upload limit
 SLEEP_BETWEEN_MESSAGES = 2            # seconds
@@ -395,6 +401,25 @@ class Telegram:
             raise TelegramError(f"{method} failed: {result.get('description')}")
         raise TelegramError(f"{method} failed after retries")
 
+    def set_menu_button(self, url: str, text: str) -> None:
+        """Point the bot's menu button at a Mini App (default for all chats,
+        plus this chat when it is a private one)."""
+        if self.dry_run:
+            log(f"  [dry-run] setChatMenuButton {text!r} -> {url}")
+            return
+        button = json.dumps({"type": "web_app", "text": text[:16],
+                             "web_app": {"url": url}})
+        targets = [None]
+        if self.chat_id.lstrip("-").isdigit() and not self.chat_id.startswith("-"):
+            targets.append(self.chat_id)
+        for chat in targets:
+            fields = {"menu_button": button}
+            if chat:
+                fields["chat_id"] = chat
+            self._call("setChatMenuButton", urllib.parse.urlencode(fields).encode(),
+                       "application/x-www-form-urlencoded")
+        log(f"  Menu button set: {text!r} -> {url}")
+
     def send_message(self, text: str) -> None:
         self._pause()
         if self.dry_run:
@@ -471,6 +496,8 @@ def main() -> int:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--dry-run", action="store_true",
                         help="no downloads, no Telegram calls, seen.json not written")
+    parser.add_argument("--setup-menu", action="store_true",
+                        help="only set the Mini App menu button (needs MINI_APP_URL), then exit")
     args = parser.parse_args()
 
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
@@ -482,6 +509,23 @@ def main() -> int:
     if LANGUAGE not in ("", "hindi", "english"):
         log(f"ERROR: LANGUAGE must be 'hindi', 'english' or empty, got {LANGUAGE!r}")
         return 2
+
+    if args.setup_menu and not MINI_APP_URL:
+        log("ERROR: --setup-menu needs MINI_APP_URL (an https:// address)")
+        return 2
+    if MINI_APP_URL and not MINI_APP_URL.startswith("https://"):
+        log(f"ERROR: MINI_APP_URL must start with https://, got {MINI_APP_URL!r}")
+        return 2
+
+    menu_failed = False
+    if MINI_APP_URL:
+        try:
+            Telegram(token, chat_id, args.dry_run).set_menu_button(MINI_APP_URL, MINI_APP_TEXT)
+        except TelegramError as exc:
+            menu_failed = True
+            log(f"ERROR: could not set the menu button: {exc}")
+    if args.setup_menu:
+        return 1 if menu_failed else 0
 
     log(f"Settings: year={YEAR!r} language={LANGUAGE or 'both'!r} "
         f"category={CATEGORY!r} dry_run={args.dry_run}")
