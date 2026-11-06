@@ -21,7 +21,9 @@
 <body>
 <h1>UPSC Prelims Test Series 2027</h1>
 <p><small>upscpdf.com की सबसे नई पोस्ट और उनकी Drive फ़ाइलें।</small></p>
-<button id="go">सूची ताज़ा करें</button>
+<button id="send">📥 मेरी फ़ाइलें Telegram पर भेजें</button>
+<p><small>दबाने पर GitHub खुलेगा। वहाँ <b>Run workflow</b> दबाइए। नई फ़ाइलें कुछ मिनट में आपके Telegram पर आ जाएँगी। पुरानी सब फ़ाइलें भी चाहिए तो <b>send_all</b> पर टिक कीजिए।</small></p>
+<button id="go" style="background:#555;margin-top:8px">सूची ताज़ा करें</button>
 <div id="out"></div>
 <script>
 const tg = window.Telegram && Telegram.WebApp; if (tg) tg.ready();
@@ -36,6 +38,10 @@ function note(msg, cls) { const d = card(); const s = document.createElement("sp
 function link(parent, href, label) { const a = document.createElement("a"); a.href = href; a.target = "_blank"; a.rel = "noopener"; a.textContent = label; parent.appendChild(a); }
 async function getJson(url) { const r = await fetch(url, { cache: "no-store" }); if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }
 
+document.getElementById("send").onclick = () => {
+  const u = "https://github.com/kurafatengineer/testing/actions/workflows/check.yml";
+  if (tg && tg.openLink) tg.openLink(u); else window.open(u, "_blank");
+};
 document.getElementById("go").onclick = async () => {
   out.innerHTML = "";
   note("लोड हो रहा है...");

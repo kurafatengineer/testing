@@ -52,7 +52,7 @@ CATEGORY = "Prelims TEST Series"
 YEAR = os.environ.get("YEAR", "2027").strip() or "2027"
 LANGUAGE = os.environ.get("LANGUAGE", "").strip().lower()
 SEEN_FILE = Path(os.environ.get("SEEN_FILE", "seen.json"))
-FIRST_RUN_COUNT = int(os.environ.get("FIRST_RUN_COUNT", "2"))
+FIRST_RUN_COUNT = int(os.environ.get("FIRST_RUN_COUNT", "").strip() or "2")
 MINI_APP_URL = os.environ.get("MINI_APP_URL", "").strip()
 MINI_APP_TEXT = os.environ.get("MINI_APP_TEXT", "").strip() or "Feed Test"
 

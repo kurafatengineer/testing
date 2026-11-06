@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "*/30 * * * *"
   workflow_dispatch:
+    inputs:
+      send_all:
+        description: "Send ALL matching posts again (forgets what was already sent)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -25,8 +30,13 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Forget sent posts (send_all)
+        if: ${{ inputs.send_all }}
+        run: rm -f seen.json
+
       - name: Run bot
         env:
+          FIRST_RUN_COUNT: ${{ inputs.send_all && '1000' || '' }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           YEAR: ${{ vars.YEAR }}
