@@ -1,75 +1,84 @@
-# Tutor-required poster bot (runs entirely on Supabase)
+# UPSC Test Series Telegram Bot
 
-A person asks the Telegram bot for a "Tutor Required" poster in one of two ways and gets the **same two posters** back:
+यह बॉट हर 30 मिनट में https://upscpdf.com/feed/ चेक करता है और **Prelims TEST Series** की नई (साल 2027 वाली) पोस्ट की PDF आपके Telegram पर भेज देता है।
+सब कुछ GitHub Actions पर मुफ़्त चलता है — कोई सर्वर या `pip install` नहीं चाहिए।
 
-1. **Chat:** type `Hi` and answer the questions, or paste the one-message format.
-2. **Mini App form:** `/form` (or the **Form** button) opens a form inside Telegram with a live preview.
+## यह कैसे काम करता है
 
-Nothing needs Python or a server. The poster designs of the old Python bot are redrawn as vector graphics in TypeScript
-(same layout, same text fitting, checked pixel by pixel against the Python output).
+1. फ़ीड पढ़ता है और सिर्फ़ वही पोस्ट रखता है जिनकी category में `Prelims TEST Series` हो और title में `2027` हो।
+2. पोस्ट के अंदर से Google Drive की फ़ाइल लिंक (`drive.google.com/file/d/...`) और फ़ोल्डर लिंक निकालता है।
+3. हर फ़ाइल डाउनलोड करता है। अगर वह असली PDF है और 50 MB से छोटी है, तो Telegram पर **फ़ाइल** भेजता है (caption में पोस्ट का title और लिंक)।
+   डाउनलोड न हो पाए या फ़ाइल बड़ी हो, तो Drive का लिंक **मैसेज** में भेजता है। फ़ोल्डर लिंक भी मैसेज में आते हैं।
+4. भेजी गई पोस्ट `seen.json` में लिख दी जाती है, ताकि दोबारा न आए।
+   **पहली बार** चलने पर सिर्फ़ 2 सबसे नई पोस्ट भेजी जाती हैं, बाकी पुरानी "देखी हुई" मान ली जाती हैं।
 
-```
-Telegram  --message/button-->  Edge Function  telegram-bot  --+
-Mini App  --form------------>  Edge Function  submit-ad    --+--> approval check (admins + allowed_users)
- (docs/index.html, GitHub Pages)                              |
-                                          Edge Function render-poster  (once per poster, own CPU budget)
-                                                              |
-                                      2 posters + caption sent back to the person's chat
-```
+## सेटअप (एक बार करना है)
 
-## What is where
+### चरण 1 — @BotFather से बॉट बनाइए
 
-| Path | What it is |
-|---|---|
-| `supabase/functions/telegram-bot` | Telegram webhook: approval, `/users`, `Hi` questions, template, `/form` |
-| `supabase/functions/telegram-bot` (also) | Receives the Mini App form on the same address (checks Telegram's signature first) |
-| `supabase/functions/render-poster` | Draws ONE poster (1 or 2) as a PNG |
-| `supabase/functions/_shared` | Poster drawing (`poster1.ts`, `poster2.ts`), bot logic (`bot.ts`), Telegram/database clients |
-| `supabase/migrations` | Database tables |
-| `docs/index.html` | The Mini App form (published with GitHub Pages) |
-| `assets/` | Fonts, images and the renderer (`resvg.wasm`) the poster function downloads at start-up |
-| `fonts-source/`, `scripts/` | Original fonts and the script that makes the compact ones in `assets/fonts` |
-| `tests/` | `flow_test.ts` (whole conversation, no network), `render_compare.ts` (draws both posters) |
+1. Telegram में **@BotFather** खोलिए और `/newbot` भेजिए।
+2. बॉट का नाम दीजिए (जैसे `UPSC PDF Alerts`), फिर username दीजिए जो `bot` पर ख़त्म हो (जैसे `my_upsc_pdf_bot`)।
+3. BotFather एक **token** देगा, कुछ ऐसा: `1234567890:AAH...xyz`। इसे संभाल कर रखिए और किसी को मत दिखाइए।
 
+### चरण 2 — अपना Chat ID निकालिए
 
-## Who can use the bot
+1. अपने नए बॉट को Telegram में खोलिए और **Start** दबाइए, फिर कोई भी मैसेज भेजिए (जैसे `hi`)।
+2. ब्राउज़र में यह खोलिए (`<TOKEN>` की जगह अपना token लगाइए):
 
-Only **admins** (`ADMIN_ID`) and **approved users**. A new person sends `/start`, every admin gets an Approve / Reject
-message, and the person is let in once one admin taps Approve. Admins send `/user` (or `/users`) to see the list:
-it is buttons only, tap a name, then confirm, to remove someone.
-Privacy: the details of a poster request are never saved (a failure keeps only who and the error). The chat is kept clean: each new message removes the previous questions and answers; only the poster files and
-their caption stay.
+   ```
+   https://api.telegram.org/bot<TOKEN>/getUpdates
+   ```
 
-For quick tests without approval set the secret `OPEN_ACCESS` = `true` (everyone gets in). Leave it unset normally.
-`render-poster` has a public demo/preview page (`.../functions/v1/render-poster?poster=1`) that the form's preview uses.
+3. जवाब में `"chat":{"id":123456789, ...}` ढूँढिए। यही नंबर आपका **Chat ID** है।
+   - अगर `"result":[]` (ख़ाली) आए, तो बॉट को एक और मैसेज भेजकर पेज refresh कीजिए।
+   - **ग्रुप** में भेजना हो: बॉट को ग्रुप में add कीजिए, ग्रुप में एक मैसेज भेजिए, फिर getUpdates खोलिए। ग्रुप का ID `-` से शुरू होता है (जैसे `-1001234567890`)।
+   - **चैनल** में भेजना हो: बॉट को चैनल का admin बनाइए; Chat ID `-100...` वाला होगा।
 
-## Settings (Supabase: Edge Functions, Secrets)
+### चरण 3 — रिपॉज़िटरी में दो Secrets जोड़िए
 
-| Name | Meaning |
-|---|---|
-| `TELEGRAM_TOKEN` | Bot token from BotFather |
-| `ADMIN_ID` | Telegram user ids of the admins, comma separated |
-| `OPEN_ACCESS` | Optional. `true` = everyone can use the bot (testing only) |
-| `WEBHOOK_SECRET` | Any long random text. Telegram sends it with every update so nobody else can call the bot |
-| `MINIAPP_URL` | Address of the form, e.g. `https://kurafatengineer.github.io/testing/` |
-| `ASSET_BASE_URL` | Optional. Where `assets/` is served from (default: this repo's raw GitHub address) |
+1. GitHub पर इस repo में जाइए: **Settings → Secrets and variables → Actions**।
+2. **New repository secret** दबाइए और ये दो secret बनाइए:
 
-`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are provided to the functions automatically.
+   | Name | Value |
+   |---|---|
+   | `TELEGRAM_BOT_TOKEN` | BotFather वाला token |
+   | `TELEGRAM_CHAT_ID` | चरण 2 वाला Chat ID |
 
-## Setup, once
+Token और Chat ID कोड में कहीं नहीं लिखे हैं — वे सिर्फ़ इन secrets से आते हैं।
 
-1. Create the tables: run `supabase/migrations/*.sql` in the Supabase project.
-2. Deploy the three functions. `telegram-bot` and `submit-ad` need "verify JWT" **off** (they check their own secrets); `render-poster` keeps it on.
-3. Add the secrets above.
-4. Open `https://<project>.supabase.co/functions/v1/telegram-bot?setup=<WEBHOOK_SECRET>` once in a browser. It points Telegram at the bot and adds the **Form** button.
-5. GitHub: Settings, Pages, branch `main`, folder `/docs`.
+### चरण 4 — पहली बार Actions टैब से चलाइए
 
-## Tests
+1. repo में **Actions** टैब खोलिए। अगर workflows बंद दिखें तो **"I understand my workflows, go ahead and enable them"** दबाइए।
+2. बाईं तरफ़ **Check UPSC feed** चुनिए।
+3. **Run workflow** → **Run workflow** दबाइए।
+4. एक मिनट में run हरा (✓) हो जाना चाहिए और Telegram पर 2 सबसे नई पोस्ट आ जानी चाहिए। run खोलकर **Run bot** step में पूरा log देख सकते हैं।
+5. इसके बाद यह अपने-आप हर 30 मिनट में चलेगा और repo में `seen.json` अपडेट करता रहेगा।
+
+## सेटिंग्स बदलना (वैकल्पिक)
+
+**Settings → Secrets and variables → Actions → Variables** टैब में ये variables बना सकते हैं:
+
+| Variable | मतलब | डिफ़ॉल्ट |
+|---|---|---|
+| `YEAR` | title में कौन-सा साल होना चाहिए | `2027` |
+| `LANGUAGE` | `hindi` = सिर्फ़ Hindi वाली पोस्ट, `english` = बाकी सब, ख़ाली = दोनों | ख़ाली |
+
+सब कुछ फिर से शुरू से भेजना हो तो repo से `seen.json` डिलीट कर दीजिए — अगला run फिर "पहला run" माना जाएगा।
+
+## अपने कंप्यूटर पर टेस्ट करना
+
+सिर्फ़ Python 3.12 चाहिए:
 
 ```bash
-deno run -A tests/flow_test.ts                       # approval, Q&A, template, /users, /form, form endpoint (58 checks)
-RESVG_WASM=path/to/index_bg.wasm deno run -A tests/render_compare.ts out/   # both posters
+# Telegram को कुछ नहीं भेजता, कुछ डाउनलोड नहीं करता, seen.json नहीं बदलता
+python bot.py --dry-run
+
+# लाइव फ़ीड की जगह लोकल फ़ाइल से
+FEED_FILE=tests/sample_feed.xml python bot.py --dry-run
 ```
 
-Safety: the form endpoint and the webhook are public addresses, but every request must carry either Telegram's signed launch
-data (checked with the bot token) or the secret header, and only approved people get posters. Tables are not readable with the public key.
+## ध्यान देने वाली बातें
+
+- GitHub का cron कभी-कभी कुछ मिनट देर से चलता है — यह सामान्य है।
+- अगर repo में 60 दिन तक कोई commit न हो, तो GitHub scheduled workflow बंद कर देता है। तब Actions टैब से उसे फिर **Enable** कर दीजिए।
+- Drive की कोई फ़ाइल private हो या उसकी download limit ख़त्म हो गई हो, तो बॉट फ़ाइल की जगह Drive लिंक भेज देगा।

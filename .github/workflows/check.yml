@@ -1,0 +1,53 @@
+name: Check UPSC feed
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: upsc-telegram-bot
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run bot
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          YEAR: ${{ vars.YEAR }}
+          LANGUAGE: ${{ vars.LANGUAGE }}
+        run: python bot.py
+
+      # Runs even if the bot step failed, so posts that were sent are not sent again.
+      - name: Commit seen.json if it changed
+        if: ${{ !cancelled() }}
+        run: |
+          if [ ! -f seen.json ]; then
+            echo "seen.json not created; nothing to commit"
+            exit 0
+          fi
+          git add seen.json
+          if git diff --cached --quiet; then
+            echo "seen.json unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update seen.json"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
