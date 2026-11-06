@@ -143,6 +143,10 @@
     width:min(92vw, 560px); padding:14px 18px; border-radius:20px; background:var(--inv-bg); color:var(--inv-ink);
     font-size:14px; line-height:1.4; opacity:0; pointer-events:none; transition:.25s; z-index:30; text-align:center; }
   #toast.on { opacity:1; transform:translate(-50%,0); }
+  .legend { display:flex; justify-content:center; gap:18px; margin:14px 0 0; font-size:12.5px; color:var(--muted); }
+  .legend span { display:inline-flex; align-items:center; gap:7px; }
+  .legend i { width:9px; height:9px; border-radius:50%; display:block; }
+  body.denied .legend { display:none; }
   .modebar { display:flex; justify-content:center; padding:2px 0 4px; }
   .modechip { display:inline-flex; align-items:center; gap:7px; height:32px; padding:0 14px; border-radius:999px; border:1px solid var(--line);
     background:transparent; color:var(--muted); font-size:12.5px; font-weight:600; }
@@ -174,6 +178,11 @@
       </div>
       <div class="suggest" id="suggest" role="listbox" hidden></div>
     </div></div>
+    <div class="legend" id="legend" aria-label="Colour guide">
+      <span><i style="background:var(--new)"></i>New</span>
+      <span><i style="background:var(--ok)"></i>Sent</span>
+      <span><i style="background:var(--bad)"></i>Can't be sent</span>
+    </div>
     <p class="hint" id="hint" hidden></p>
   </div>
 </header>
@@ -465,7 +474,7 @@ function render() {
   if (!mb.hidden) {
     const chip = $("modeBtn"); chip.classList.toggle("public", mode === "public");
     chip.replaceChildren(icon(mode === "public" ? "globe" : "lock", 15, 2),
-      mode === "public" ? "Public \u00b7 anyone can use this app" : "Private \u00b7 only you");
+      mode === "public" ? "Public" : "Private");
     chip.title = chip.ariaLabel = "Tap to make it " + (mode === "public" ? "private" : "public");
   }
   renderSites();
@@ -569,9 +578,8 @@ $("q").addEventListener("keydown", e => {
 $("clear").addEventListener("click", () => { query = ""; $("q").value = ""; suggestOpen = false; render(); });
 $("modeBtn").addEventListener("click", async () => {
   const next = mode === "public" ? "private" : "public", btn = $("modeBtn");
-  if (next === "public" && !confirm("Make this app PUBLIC?\n\nAnyone who opens the bot will be able to use it. Their files go to their own Telegram chat, with a daily limit.")) return;
   btn.disabled = true; toast("Switching...", 0);
-  try { applyStatus(await callScript({ action: "setMode", mode: next })); toast(next === "public" ? "The app is now Public" : "The app is now Private"); }
+  try { applyStatus(await callScript({ action: "setMode", mode: next })); toast(next === "public" ? "Public: anyone can use this app" : "Private: only you can use this app"); }
   catch (e) { toast(e.message, 6000); }
   btn.disabled = false; render();
 });
