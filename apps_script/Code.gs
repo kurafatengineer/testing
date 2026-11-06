@@ -62,76 +62,14 @@ function useQuota_(userId, n) {
   PropertiesService.getScriptProperties().setProperty('lim_' + userId, today_() + '|' + (q.used + n));
 }
 
-// Telegram के संदेश (Hi / Start) इसी Web App पर आते हैं। पता गुप्त कुंजी (?k=...) से सुरक्षित रहता है,
-// जो bot token से बनती है; Telegram के अलावा कोई और इस रास्ते से कुछ नहीं करवा सकता।
-var DEFAULT_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyRP4WC23dmnYcUwD16HnSe3eUPwDytA9MhKl0SgccbeVLqpZV-dS6gcL8JW8L5cBaS/exec';
-
-function hookSecret_(token) {
-  return toHex_(Utilities.computeHmacSha256Signature('telegram-webhook', token)).slice(0, 32);
-}
-
-/** एक बार चलाइए: Telegram को बताता है कि संदेश इस Web App पर भेजे। */
-function setupWebhook() {
+// बॉट किसी संदेश (Hi / Start) का जवाब नहीं देता। अगर पहले `setupWebhook` चलाया था तो एक बार
+// `removeWebhook` चलाइए, ताकि Telegram संदेश इस Web App को भेजना बंद कर दे।
+function removeWebhook() {
   var token = cfg_('TELEGRAM_BOT_TOKEN');
   if (!token) throw new Error('TELEGRAM_BOT_TOKEN not set');
-  var url = cfg_('WEBAPP_URL', DEFAULT_WEBAPP_URL) + '?k=' + hookSecret_(token);
-  var res = UrlFetchApp.fetch('https://api.telegram.org/bot' + token + '/setWebhook', {
-    method: 'post', muteHttpExceptions: true,
-    payload: { url: url, allowed_updates: JSON.stringify(['message']), drop_pending_updates: 'true' } });
+  var res = UrlFetchApp.fetch('https://api.telegram.org/bot' + token + '/deleteWebhook', {
+    method: 'post', muteHttpExceptions: true, payload: { drop_pending_updates: 'true' } });
   Logger.log(res.getContentText().replace(token, '***'));
-  Logger.log('Now run checkWebhook, then send Hi to the bot.');
-}
-
-/** हालत जाँचिए: Telegram का webhook सेट है? कोई error? (token या गुप्त पता कभी नहीं छापता) */
-function checkWebhook() {
-  var token = cfg_('TELEGRAM_BOT_TOKEN');
-  if (!token) throw new Error('TELEGRAM_BOT_TOKEN not set');
-  function tg(method) {
-    var res = UrlFetchApp.fetch('https://api.telegram.org/bot' + token + '/' + method, { muteHttpExceptions: true });
-    return JSON.parse(res.getContentText());
-  }
-  var me = tg('getMe'), info = tg('getWebhookInfo');
-  if (!me.ok) { Logger.log('Telegram rejected the bot token: ' + me.description); return; }
-  var r = info.result || {};
-  var app = cfg_('WEBAPP_URL', DEFAULT_WEBAPP_URL);
-  Logger.log('Bot: @' + me.result.username);
-  Logger.log('Webhook set: ' + (r.url ? 'YES' : 'NO  ->  run setupWebhook'));
-  if (r.url) Logger.log('Points to this web app: ' + (r.url.indexOf(app) === 0 ? 'YES' : 'NO  ->  set WEBAPP_URL to your /exec address and run setupWebhook again'));
-  Logger.log('Waiting updates: ' + (r.pending_update_count || 0));
-  Logger.log('Last Telegram error: ' + (r.last_error_message ? r.last_error_message + ' (' + new Date(r.last_error_date * 1000).toISOString() + ')' : 'none'));
-  Logger.log('Mode: ' + getMode_() + ' | owner chat id: ' + (cfg_('TELEGRAM_CHAT_ID') ? 'set' : 'MISSING'));
-}
-
-/** Telegram का एक संदेश (Hi / Start): मालिक को स्वागत; Public में सबको स्वागत; Private में "निजी बॉट" का संदेश। */
-function handleUpdate_(update, token, chat) {
-  var msg = update.message;
-  if (!msg || !msg.from || !msg.chat || msg.chat.type !== 'private' || msg.from.is_bot) return;
-  var props = PropertiesService.getScriptProperties();
-  var last = Number(props.getProperty('last_update') || 0);
-  if (update.update_id <= last) return;                      // Telegram कभी-कभी वही संदेश दोबारा भेजता है
-  props.setProperty('last_update', String(update.update_id));
-
-  var name = esc_(String(msg.from.first_name || 'there').slice(0, 40));
-  var auth = authorize_(msg.from.id, chat);
-  if (auth.ok && auth.owner) {
-    tgMessage_(token, msg.chat.id, '👋 Welcome back, <b>' + name + '</b>!\n\n' +
-      'Tap the <b>menu button</b> next to the message box to open your Test Series app. ' +
-      'From there you can pick files and they will be sent to this chat.');
-    return;
-  }
-  var cache = CacheService.getScriptCache(), k = 'greeted:' + msg.from.id;
-  if (cache.get(k)) return;                                  // एक ही व्यक्ति को बार-बार जवाब नहीं
-  cache.put(k, '1', 21600);
-  if (auth.ok) {
-    tgMessage_(token, msg.chat.id, '👋 Hi <b>' + name + '</b>, welcome!\n\n' +
-      'Tap the <b>menu button</b> next to the message box to open the UPSC CSE Test Series app. ' +
-      'Pick any file there and it will be sent to <b>this chat</b>.');
-    return;
-  }
-  tgMessage_(token, msg.chat.id, '👋 Hi <b>' + name + '</b>!\n\n' +
-    '🔒 This is a <b>private bot</b> for now. It sends UPSC CSE test series files to its owner only, ' +
-    'so there is nothing here for you to start or download.\n\n' +
-    'Thanks for stopping by!');
 }
 
 // -------------------------------------------------- "भेजी जा चुकी" सूची (हर व्यक्ति की अलग)
@@ -501,11 +439,7 @@ function doPost(e) {
     if (!token || !chat) throw new Error('TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set');
     var body = JSON.parse(e.postData.contents);
 
-    if (body.update_id !== undefined) {                      // Telegram से आया संदेश (webhook)
-      if (!e.parameter || e.parameter.k !== hookSecret_(token)) return ContentService.createTextOutput('ok');
-      try { handleUpdate_(body, token, chat); } catch (hookErr) { Logger.log('webhook: ' + String(hookErr.message).replace(token, '***')); }
-      return ContentService.createTextOutput('ok');
-    }
+    if (body.update_id !== undefined) return ContentService.createTextOutput('ok');   // Telegram का संदेश: अनदेखा, कोई जवाब नहीं
 
     var user = verifyInitData_(body.initData, token);
     var auth = authorize_(user.id, chat);
