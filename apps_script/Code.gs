@@ -53,6 +53,18 @@ function saveSeen_(seen) {
   props.deleteProperty('seen');
 }
 
+// उन पोस्ट की सूची जिनकी कोई PDF नहीं जा सकी: { postId: "short reason" } (Mini App में लाल दिखती हैं)
+function loadIssues_() {
+  var raw = PropertiesService.getScriptProperties().getProperty('issues');
+  try { return raw ? JSON.parse(raw) : {}; } catch (e) { return {}; }
+}
+
+function saveIssues_(issues) {
+  var keys = Object.keys(issues);
+  keys.slice(0, Math.max(0, keys.length - 60)).forEach(function (k) { delete issues[k]; });   // 9 KB सीमा
+  PropertiesService.getScriptProperties().setProperty('issues', JSON.stringify(issues));
+}
+
 /** "भेजी हुई" सूची मिटाता है; Mini App में सारे टिक हट जाएँगे। */
 function resetSeen() {
   var props = PropertiesService.getScriptProperties();
@@ -60,6 +72,7 @@ function resetSeen() {
   for (var i = 0; i < n; i++) props.deleteProperty('seen_' + i);
   props.deleteProperty('seen_n');
   props.deleteProperty('seen');
+  props.deleteProperty('issues');
   Logger.log('seen list cleared');
 }
 
@@ -158,7 +171,7 @@ function deliver_(post, token, chat) {
   var info = listFiles_(post);
   if (!info.ok.length && !info.manual.length) {
     tgMessage_(token, chat, header_(post) + '\n\n(No Google Drive link found in this post)');
-    return;
+    return 'No Google Drive link found in this post';
   }
   var groups = chunk_(info.ok);
   groups.forEach(function (g, i) {
@@ -176,7 +189,9 @@ function deliver_(post, token, chat) {
     });
     tgMessage_(token, chat, header_(post) +
       '\n\n⚠️ These files could not be sent automatically. Please download them yourself:\n' + lines.join('\n'));
+    return info.manual.length + ' file(s) not sent: ' + info.manual[0].why;
   }
+  return '';
 }
 
 function tgCall_(token, method, payload) {
@@ -258,7 +273,7 @@ function doGet() { return reply_({ ok: true, info: 'UPSC bot web app is running'
 
 /**
  * body = { initData, action: 'status' | 'send', posts: [...], force: bool }
- *  status -> { ok, seen: [ids] }
+ *  status -> { ok, seen: [ids], issues: { id: reason } }
  *  send   -> { ok, total, already, sent, failed, left, done: [ids], failedIds: [ids] }
  *            force=true: "seen" को अनदेखा करके फिर से भेजता है (फ़ाइल दोबारा चाहिए तब)।
  */
@@ -272,12 +287,13 @@ function doPost(e) {
     var user = verifyInitData_(body.initData, token);
     if (String(chat).charAt(0) !== '-' && String(user.id) !== String(chat)) throw new Error('not allowed');
 
-    if (body.action === 'status') return reply_({ ok: true, seen: loadSeen_() });
+    if (body.action === 'status') return reply_({ ok: true, seen: loadSeen_(), issues: loadIssues_() });
 
     if (!lock.tryLock(5000)) throw new Error('Another send is in progress. Please try again in a moment.');
     locked = true;
     var started = Date.now();
     var seen = loadSeen_();
+    var issues = loadIssues_();
     var force = body.force === true;
     var posts = cleanPosts_(body.posts).sort(function (a, b) { return a.time - b.time; });
     var todo = posts.filter(function (p) { return force || seen.indexOf(p.id) === -1; });
@@ -285,9 +301,11 @@ function doPost(e) {
     for (var i = 0; i < todo.length; i++) {
       if (Date.now() - started > RUN_BUDGET_MS) { left = todo.length - i; break; }
       try {
-        deliver_(todo[i], token, chat);
+        var problem = deliver_(todo[i], token, chat);
         if (seen.indexOf(todo[i].id) === -1) seen.push(todo[i].id);
         saveSeen_(seen);
+        if (problem) issues[todo[i].id] = String(problem).slice(0, 60); else delete issues[todo[i].id];
+        saveIssues_(issues);
         done.push(todo[i].id);
       } catch (err) {
         failedIds.push(todo[i].id);
@@ -296,7 +314,7 @@ function doPost(e) {
     }
     return reply_({ ok: true, total: posts.length, already: posts.length - todo.length,
                     sent: done.length, failed: failedIds.length, left: left,
-                    done: done, failedIds: failedIds });
+                    done: done, failedIds: failedIds, issues: issues });
   } catch (err) {
     var msg = String(err.message);
     Logger.log('doPost error: ' + msg);

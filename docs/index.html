@@ -9,13 +9,13 @@
 <style>
   :root {
     --bg:#ffffff; --ink:#0a0a0a; --muted:#6b6b6b; --line:#e4e4e4; --card:#fafafa;
-    --inv-bg:#0a0a0a; --inv-ink:#ffffff; --ok:#15803d; --ok-bg:#eefaf1; --ok-line:#b7e4c4; --bad:#b91c1c;
+    --inv-bg:#0a0a0a; --inv-ink:#ffffff; --ok:#15803d; --ok-bg:#eefaf1; --ok-line:#b7e4c4; --bad:#b91c1c; --bad-bg:#fff1f1; --bad-line:#f3b8b8;
     --shadow:0 10px 30px rgba(0,0,0,.12);
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg:#000000; --ink:#f5f5f5; --muted:#8e8e8e; --line:#262626; --card:#0e0e0e;
-      --inv-bg:#f5f5f5; --inv-ink:#000000; --ok:#4ade80; --ok-bg:#08170d; --ok-line:#1b4d2b; --bad:#f87171;
+      --inv-bg:#f5f5f5; --inv-ink:#000000; --ok:#4ade80; --ok-bg:#08170d; --ok-line:#1b4d2b; --bad:#f87171; --bad-bg:#1a0808; --bad-line:#5c1d1d;
       --shadow:0 10px 30px rgba(0,0,0,.6);
     }
   }
@@ -69,10 +69,12 @@
   .item { display:grid; grid-template-columns:26px minmax(0,1fr) 46px; gap:12px; align-items:center; padding:14px;
     margin-top:10px; border:1px solid var(--line); border-radius:22px; background:var(--card); }
   .item.sent { background:var(--ok-bg); border-color:var(--ok-line); }
+  .item.bad { background:var(--bad-bg); border-color:var(--bad-line); }
   .item.flash { animation:flash 1.6s ease; }
   @keyframes flash { 0%,60% { box-shadow:0 0 0 3px var(--ink); } 100% { box-shadow:0 0 0 3px transparent; } }
   .mark { width:26px; height:26px; border-radius:50%; display:grid; place-items:center; border:1.5px solid var(--line); color:transparent; }
   .item.sent .mark { background:var(--ok); border-color:var(--ok); color:#fff; }
+  .item.bad .mark { background:var(--bad); border-color:var(--bad); color:#fff; }
   .item.sending .mark { border-color:var(--ink); border-top-color:transparent; animation:spin .8s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
   .name { overflow:hidden; white-space:nowrap; font-weight:620; font-size:15.5px; letter-spacing:-.005em; }
@@ -83,10 +85,14 @@
   .meta { display:flex; align-items:center; gap:8px; margin-top:4px; color:var(--muted); font-size:13px; }
   .state { font-weight:600; }
   .item.sent .state { color:var(--ok); }
+  .item.bad .state { color:var(--bad); }
+  .reason { margin-top:4px; font-size:12.5px; line-height:1.35; color:var(--bad); font-weight:550; }
   .post { width:28px; height:28px; border-radius:50%; border:1px solid var(--line); display:grid; place-items:center; color:var(--muted);
     text-decoration:none; margin-left:auto; }
   .send { width:46px; height:46px; border-radius:50%; border:0; background:var(--inv-bg); color:var(--inv-ink); display:grid; place-items:center; }
   .item.sent .send { background:var(--ok); color:#fff; }
+  .item.bad .send { background:var(--bad); color:#fff; }
+  .sg .bad { flex:none; color:var(--bad); }
   .send:disabled { opacity:.4; cursor:default; }
 
   .empty, .error { text-align:center; color:var(--muted); padding:48px 16px; }
@@ -185,7 +191,8 @@ const ICONS = {
   search: ["M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z", "m20 20-3.5-3.5"],
   check:  ["M5 12.5l4.5 4.5L19 7"],
   link:   ["M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6", "M15 3h6v6", "M10 14 21 3"],
-  close:  ["M6 6l12 12", "M18 6 6 18"]
+  close:  ["M6 6l12 12", "M18 6 6 18"],
+  alert:  ["M12 7v6", "M12 17.2v.01"]
 };
 function icon(name, size = 18, width = 2) {
   const NS = "http://www.w3.org/2000/svg", s = document.createElementNS(NS, "svg");
@@ -214,6 +221,8 @@ const allSites = () => BUILTIN.concat(customSites);
 let cur = Math.min(Math.max(store.get("cur", 0), 0), allSites().length - 1);
 const data = new Map();            // site url -> {items: Map, page, done, loading, error}
 let seen = new Set(), seenKnown = false;
+let issues = {};                   // post key -> why its PDF could not be sent (kept by the Apps Script)
+const failedNow = new Set();       // posts that failed to send in this session
 let query = "", suggestOpen = false, flashId = null;
 const sending = new Set();
 let busy = false;
@@ -225,6 +234,7 @@ const api = s => s.url.replace(/\/$/, "") + "/wp-json/wp/v2";
 const keyOf = (s, id) => host(s) === "upscpdf.com" ? String(id) : host(s) + ":" + id;
 const stateOf = s => { if (!data.has(s.url)) data.set(s.url, { items: new Map(), page: 0, done: false, loading: false, error: "" }); return data.get(s.url); };
 const isSent = i => seenKnown && seen.has(i.key);
+const problemOf = i => issues[i.key] || (failedNow.has(i.key) ? "Sending failed - tap the red button to retry" : "");
 
 /* ------------------------------ loading posts ------------------------------ */
 async function fetchPosts(s, search, page) {
@@ -284,7 +294,7 @@ async function callScript(body) {
 }
 
 async function refreshStatus() {
-  try { seen = new Set((await callScript({ action: "status" })).seen); seenKnown = true; }
+  try { const j = await callScript({ action: "status" }); seen = new Set(j.seen); issues = j.issues || {}; seenKnown = true; }
   catch (e) { seenKnown = false; if (tg && tg.initData) toast("Could not load the sent status: " + e.message); }
   render();
 }
@@ -301,7 +311,9 @@ async function sendItems(items, force) {
       await ensureContent(s, part);
       const j = await callScript({ action: "send", force: !!force, posts: part.map(i => ({
         id: i.key, title: i.title, link: i.link, time: i.time, files: i.files, folders: i.folders })) });
-      j.done.forEach(id => seen.add(id)); sent += j.sent; failed += j.failed;
+      j.done.forEach(id => { seen.add(id); failedNow.delete(id); }); (j.failedIds || []).forEach(id => failedNow.add(id));
+      if (j.issues) issues = j.issues;
+      sent += j.sent; failed += j.failed;
       part.forEach(i => sending.delete(i.key));
       if (j.left) { failed += j.left; break; }
       render();
@@ -333,7 +345,7 @@ function renderSuggest() {
   if (!suggestOpen || !q) { box.hidden = true; return; }
   const found = matching(q);
   found.slice(0, MAX_SUGGEST).forEach(i => box.append(h("button", { class: "sg", role: "option", onclick: () => pick(i) },
-    h("span", { class: "t" }, i.title), isSent(i) ? h("span", { class: "ok" }, icon("check", 16, 3)) : h("span", { class: "d" }, fmtDate(i.time)))));
+    h("span", { class: "t" }, i.title), problemOf(i) ? h("span", { class: "bad" }, icon("alert", 16, 3)) : isSent(i) ? h("span", { class: "ok" }, icon("check", 16, 3)) : h("span", { class: "d" }, fmtDate(i.time)))));
   if (found.length > MAX_SUGGEST) box.append(h("div", { class: "sg", style: "color:var(--muted);min-height:36px" }, "+" + (found.length - MAX_SUGGEST) + " more below"));
   box.append(h("button", { class: "sg site", onclick: () => { suggestOpen = false; serverSearch(); } },
     icon("search", 16), h("span", { class: "t" }, "Search “" + q + "” on the website")));
@@ -355,16 +367,18 @@ function fitNames() {
 }
 
 function card(i) {
-  const sent = isSent(i), isSending = sending.has(i.key);
-  const el = h("li", { class: "item" + (sent ? " sent" : "") + (isSending ? " sending" : "") + (flashId === i.key ? " flash" : "") },
-    h("div", { class: "mark", "aria-hidden": "true" }, sent && !isSending ? icon("check", 14, 3.4) : null),
+  const isSending = sending.has(i.key), problem = isSending ? "" : problemOf(i);
+  const sent = isSent(i) && !problem;
+  const el = h("li", { class: "item" + (sent ? " sent" : "") + (problem ? " bad" : "") + (isSending ? " sending" : "") + (flashId === i.key ? " flash" : "") },
+    h("div", { class: "mark", "aria-hidden": "true" }, isSending ? null : problem ? icon("alert", 16, 3) : sent ? icon("check", 14, 3.4) : null),
     h("div", { style: "min-width:0" },
       h("div", { class: "name", title: i.title }, h("span", { class: "t" }, i.title)),
       h("div", { class: "meta" }, h("span", {}, fmtDate(i.time)),
-        seenKnown ? h("span", { class: "state" }, isSending ? "Sending..." : sent ? "Sent" : "New") : null,
-        h("a", { class: "post", href: safeUrl(i.link), target: "_blank", rel: "noopener", "aria-label": "Open the website post", title: "Open the website post" }, icon("link", 14)))),
-    h("button", { class: "send", disabled: busy, "aria-label": sent ? "Send again to Telegram" : "Send to Telegram",
-      title: sent ? "Send again to Telegram" : "Send to Telegram", onclick: () => sendItems([i], sent) }, icon("send", 20)));
+        seenKnown || problem ? h("span", { class: "state" }, isSending ? "Sending..." : problem ? (issues[i.key] ? "Problem" : "Failed") : sent ? "Sent" : "New") : null,
+        h("a", { class: "post", href: safeUrl(i.link), target: "_blank", rel: "noopener", "aria-label": "Open the website post", title: "Open the website post" }, icon("link", 14))),
+      problem ? h("div", { class: "reason" }, problem) : null),
+    h("button", { class: "send", disabled: busy, "aria-label": problem ? "Try sending again" : sent ? "Send again to Telegram" : "Send to Telegram",
+      title: problem ? "Try sending again" : sent ? "Send again to Telegram" : "Send to Telegram", onclick: () => sendItems([i], isSent(i)) }, icon("send", 20)));
   return el;
 }
 
