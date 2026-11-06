@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import email.utils
+import gzip
 import html
 import json
 import mimetypes
@@ -57,7 +58,24 @@ USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 )
-CONTENT_NS = "{http://purl.org/rss/1.0/modules/content/}encoded"
+BROWSER_HEADERS = {
+    "User-Agent": USER_AGENT,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,"
+              "application/rss+xml,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9,hi;q=0.8",
+    "Accept-Encoding": "gzip",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Sec-Ch-Ua": '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Windows"',
+}
+CONTENT_NS ="{http://purl.org/rss/1.0/modules/content/}encoded"
 
 FILE_ID_RE = re.compile(r"drive\.google\.com/file/d/([A-Za-z0-9_-]{10,})")
 FOLDER_RE = re.compile(
@@ -91,19 +109,40 @@ def fetch_feed() -> bytes:
     if feed_file:
         log(f"Reading feed from local file {feed_file}")
         return Path(feed_file).read_bytes()
-    log(f"Fetching feed {FEED_URL}")
-    req = urllib.request.Request(
-        FEED_URL,
-        headers={
-            "User-Agent": USER_AGENT,
-            "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-        },
-    )
-    with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
-        data = resp.read()
-    log(f"Feed downloaded: {len(data)} bytes")
-    return data
+    base = FEED_URL.split("?")[0].rstrip("/")
+    site = base.rsplit("/feed", 1)[0] if base.endswith("/feed") else base
+    candidates = unique([FEED_URL, f"{site}/feed/rss2/", f"{site}/?feed=rss2"])
+    last_error: Exception | None = None
+    for attempt, url in enumerate(candidates):
+        if attempt:
+            time.sleep(3)
+        log(f"Fetching feed {url}")
+        req = urllib.request.Request(url, headers=BROWSER_HEADERS)
+        try:
+            with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
+                data = resp.read()
+                encoding = (resp.headers.get("Content-Encoding") or "").lower()
+        except urllib.error.HTTPError as exc:
+            body = exc.read()[:400]
+            if (exc.headers.get("Content-Encoding") or "").lower() == "gzip":
+                try:
+                    body = gzip.decompress(body)
+                except Exception:
+                    pass
+            log(f"  HTTP {exc.code} from {url} (server={exc.headers.get('Server')!r}, "
+                f"cf-ray={exc.headers.get('CF-RAY')!r})")
+            log(f"  Response starts: {body[:300]!r}")
+            last_error = exc
+            continue
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            log(f"  Failed: {exc}")
+            last_error = exc
+            continue
+        if encoding == "gzip":
+            data = gzip.decompress(data)
+        log(f"Feed downloaded: {len(data)} bytes")
+        return data
+    raise last_error or OSError("feed could not be fetched")
 
 
 def unique(items: list[str]) -> list[str]:
