@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feed Test</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root { --bg:#fff; --fg:#111; --muted:#666; --ok:#0a7d32; --bad:#c62828; --card:#f3f3f3; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#17212b; --fg:#eee; --muted:#9aa; --card:#22303c; --ok:#4cd07d; --bad:#ff6b6b; } }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, sans-serif; }
+  h1 { font-size:20px; margin:0 0 12px; }
+  button { width:100%; padding:14px; font-size:16px; border:0; border-radius:10px; background:#2a9df4; color:#fff; }
+  .card { background:var(--card); border-radius:10px; padding:12px; margin-top:12px; word-break:break-word; }
+  .ok { color:var(--ok); font-weight:600; } .bad { color:var(--bad); font-weight:600; }
+  small { color:var(--muted); }
+</style>
+</head>
+<body>
+<h1>upscpdf.com feed टेस्ट</h1>
+<p><small>नीचे बटन दबाइए। यह पेज आपके फ़ोन से ही feed पढ़ने की कोशिश करेगा। फिर नतीजे का screenshot भेज दीजिए।</small></p>
+<button id="go">टेस्ट शुरू करें</button>
+<div id="out"></div>
+<script>
+const tg = window.Telegram && Telegram.WebApp; if (tg) tg.ready();
+const URLS = ["https://upscpdf.com/feed/", "https://upscpdf.com/wp-json/wp/v2/posts?per_page=5"];
+const out = document.getElementById("out");
+function card(html) { const d = document.createElement("div"); d.className = "card"; d.innerHTML = html; out.appendChild(d); }
+function esc(s) { return String(s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+document.getElementById("go").onclick = async () => {
+  out.innerHTML = "";
+  card("<small>जगह: " + (tg && tg.platform && tg.platform !== "unknown" ? "Telegram (" + esc(tg.platform) + ")" : "ब्राउज़र") + "</small>");
+  for (const url of URLS) {
+    try {
+      const r = await fetch(url, { cache: "no-store" });
+      const text = await r.text();
+      let info = "";
+      if (url.includes("/feed/")) {
+        const doc = new DOMParser().parseFromString(text, "text/xml");
+        const items = [...doc.querySelectorAll("item")];
+        const tests = items.filter(i => [...i.querySelectorAll("category")].some(c => c.textContent.trim() === "Prelims TEST Series"));
+        info = "कुल पोस्ट: " + items.length + ", Test Series: " + tests.length +
+               (tests[0] ? "<br>सबसे नई: " + esc(tests[0].querySelector("title").textContent) : "");
+      } else {
+        info = "पहले अक्षर: " + esc(text.slice(0, 80));
+      }
+      card((r.ok ? '<span class="ok">✅ खुल गया</span>' : '<span class="bad">❌ HTTP ' + r.status + "</span>") +
+           "<br><small>" + esc(url) + "</small><br>" + info);
+    } catch (e) {
+      card('<span class="bad">❌ ब्लॉक (CORS / नेटवर्क)</span><br><small>' + esc(url) + "</small><br>" + esc(e.message));
+    }
+  }
+};
+</script>
+</body>
+</html>
