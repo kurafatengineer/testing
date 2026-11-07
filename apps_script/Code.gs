@@ -72,6 +72,38 @@ function removeWebhook() {
   Logger.log(res.getContentText().replace(token, '***'));
 }
 
+// ---------------------------------------------------------- Telegram का मेन्यू बटन
+// मेन्यू बटन दो जगह सेट हो सकता है: (1) बॉट का सामान्य बटन (BotFather -> Menu Button) और (2) किसी एक चैट का
+// अपना बटन। चैट वाला बटन सामान्य बटन से ऊपर चलता है, इसलिए वह पुराना रह जाए तो BotFather में किया बदलाव नहीं दिखता।
+
+function menuText_(r) {
+  if (!r || !r.ok) return 'error: ' + (r && r.description);
+  var b = r.result || {};
+  return b.type + (b.text ? ' "' + b.text + '"' : '') + (b.web_app ? '  ->  ' + b.web_app.url : '');
+}
+
+function menuCall_(method, payload) {
+  var token = cfg_('TELEGRAM_BOT_TOKEN');
+  if (!token) throw new Error('TELEGRAM_BOT_TOKEN not set');
+  var res = UrlFetchApp.fetch('https://api.telegram.org/bot' + token + '/' + method,
+                              { method: 'post', payload: payload, muteHttpExceptions: true });
+  return JSON.parse(res.getContentText());
+}
+
+/** बताता है कि आपके चैट में और बॉट के सामान्य रूप में मेन्यू बटन का पता क्या है। */
+function checkMenuButton() {
+  var chat = cfg_('TELEGRAM_CHAT_ID');
+  Logger.log('Your chat   : ' + menuText_(menuCall_('getChatMenuButton', { chat_id: chat })));
+  Logger.log('Bot default : ' + menuText_(menuCall_('getChatMenuButton', {})));
+}
+
+/** आपके चैट का अलग बटन हटाता है, ताकि BotFather में सेट सामान्य बटन चले। */
+function resetMenuButton() {
+  var chat = cfg_('TELEGRAM_CHAT_ID');
+  var r = menuCall_('setChatMenuButton', { chat_id: chat, menu_button: JSON.stringify({ type: 'default' }) });
+  Logger.log(r.ok ? 'Done: your chat now uses the bot default menu button. Run checkMenuButton to confirm.' : 'Failed: ' + r.description);
+}
+
 // -------------------------------------------------- "भेजी जा चुकी" सूची (हर व्यक्ति की अलग)
 // ns = '' मालिक के लिए (पुरानी सूची वैसी ही रहती है), बाकी के लिए 'u<id>:'।
 // Script property की सीमा 9 KB है, इसलिए सूची कई टुकड़ों में रखी जाती है।
