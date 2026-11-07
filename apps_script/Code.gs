@@ -76,11 +76,8 @@ function removeWebhook() {
 // मेन्यू बटन दो जगह सेट हो सकता है: (1) बॉट का सामान्य बटन (BotFather -> Menu Button) और (2) किसी एक चैट का
 // अपना बटन। चैट वाला बटन सामान्य बटन से ऊपर चलता है, इसलिए वह पुराना रह जाए तो BotFather में किया बदलाव नहीं दिखता।
 
-function menuText_(r) {
-  if (!r || !r.ok) return 'error: ' + (r && r.description);
-  var b = r.result || {};
-  return b.type + (b.text ? ' "' + b.text + '"' : '') + (b.web_app ? '  ->  ' + b.web_app.url : '');
-}
+// Mini App का पता (GitHub Pages)। बदलना हो तो Script property MINI_APP_URL में लिखिए; बटन का नाम MINI_APP_TEXT में।
+var DEFAULT_MINI_APP_URL = 'https://kurafatengineer.github.io/testseriesdownload/';
 
 function menuCall_(method, payload) {
   var token = cfg_('TELEGRAM_BOT_TOKEN');
@@ -90,11 +87,38 @@ function menuCall_(method, payload) {
   return JSON.parse(res.getContentText());
 }
 
-/** बताता है कि आपके चैट में और बॉट के सामान्य रूप में मेन्यू बटन का पता क्या है। */
+/** पता खुलता है या नहीं: HTTP कोड लौटाता है (200 = ठीक, 404 = गलत/पुराना पता)। */
+function pageStatus_(url) {
+  try { return String(UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true }).getResponseCode()); }
+  catch (e) { return 'error: ' + e.message; }
+}
+
+function menuText_(r) {
+  if (!r || !r.ok) return 'error: ' + (r && r.description);
+  var b = r.result || {};
+  if (b.web_app) return b.type + ' "' + (b.text || '') + '"  ->  ' + b.web_app.url + '   [opens with HTTP ' + pageStatus_(b.web_app.url) + ']';
+  return b.type;
+}
+
+/** बताता है कि आपके चैट में और बॉट के सामान्य रूप में मेन्यू बटन का पता क्या है, और वह पता खुलता है या नहीं। */
 function checkMenuButton() {
   var chat = cfg_('TELEGRAM_CHAT_ID');
   Logger.log('Your chat   : ' + menuText_(menuCall_('getChatMenuButton', { chat_id: chat })));
   Logger.log('Bot default : ' + menuText_(menuCall_('getChatMenuButton', {})));
+  Logger.log('Expected    : ' + cfg_('MINI_APP_URL', DEFAULT_MINI_APP_URL) + '   [opens with HTTP ' + pageStatus_(cfg_('MINI_APP_URL', DEFAULT_MINI_APP_URL)) + ']');
+}
+
+/** सही पता खुद सेट करता है (आपके चैट में भी और बॉट के सामान्य रूप में भी), पहले जाँचकर कि वह खुलता है। */
+function setMenuButton() {
+  var chat = cfg_('TELEGRAM_CHAT_ID'), url = cfg_('MINI_APP_URL', DEFAULT_MINI_APP_URL), text = cfg_('MINI_APP_TEXT', 'Test Series');
+  var code = pageStatus_(url);
+  Logger.log('Page check: ' + url + '  ->  HTTP ' + code);
+  if (code !== '200') { Logger.log('That address does not open. Put the exact address from your browser into the Script property MINI_APP_URL and run this again.'); return; }
+  var button = JSON.stringify({ type: 'web_app', text: text.slice(0, 16), web_app: { url: url } });
+  var a = menuCall_('setChatMenuButton', { chat_id: chat, menu_button: button });
+  var d = menuCall_('setChatMenuButton', { menu_button: button });
+  Logger.log('Your chat: ' + (a.ok ? 'set' : 'FAILED - ' + a.description) + '  |  Bot default: ' + (d.ok ? 'set' : 'FAILED - ' + d.description));
+  Logger.log('Now close the bot chat in Telegram, open it again and tap the menu button. Run checkMenuButton to confirm.');
 }
 
 /** आपके चैट का अलग बटन हटाता है, ताकि BotFather में सेट सामान्य बटन चले। */
